@@ -36,8 +36,34 @@ PseudoNote Extended actions are accessible primarily via the context menu within
 | Analyze Static Shellcode/Bytes | Menu Only | Disassembly |
 | Toggle Call Highlight (Pseudocode) | `Ctrl+Alt+H` | Pseudocode |
 | Toggle Call Highlight (Graph/Linear) | Menu Only | Disassembly |
+| Toggle Indent Marks | `Ctrl+Alt+I` | Pseudocode |
 | Open Interactive Call Hierarchy | `Ctrl+Alt+X` | Global |
+| Open Hex Viewer | `Ctrl+Alt+B` | Global |
 | Open Struct Editor | `Ctrl+Alt+E` | Pseudocode |
+| Global Variable Explorer | Menu Only | Global |
+| Browse Virtual Tables | Menu Only | Global |
+| Virtual-Class Explorer | Menu Only | Global |
+| Callback and Dispatch Resolver | Menu Only | Global |
+| Thread and Synchronization Explorer | Menu Only | Global |
+| Exception and Unwind Explorer | Menu Only | Global |
+| Entry-Point Explorer | Menu Only | Global |
+| Structure Recovery Explorer | Menu Only | Global |
+| Decompiler Quality Inspector | Menu Only | Global |
+| Anti-Analysis Explorer | Menu Only | Global |
+| Process Injection Explorer | Menu Only | Global |
+| C2, Protocol and Packet Explorer | Menu Only | Global |
+| Syscall and Kernel Interface Mapper | Menu Only | Global |
+| Dynamic API Resolution Explorer | Menu Only | Global |
+| API Hash Explorer | Menu Only | Global |
+| Crypto and Encoding Explorer | Menu Only | Global |
+| Configuration and IOC Extractor | Menu Only | Global |
+| String Decryption Workbench | Menu Only | Global |
+| Regex Search Across IDB | Menu Only | Global |
+| Dump Selected Bytes | Menu Only | Disassembly (Selection Required) |
+| Copy Function Tree / Global Xref Tree | Menu Only | Global |
+| Comment Explorer | Menu Only | Global |
+| Automatic Enum Recovery | Menu Only | Global |
+| Change History and Undo Explorer | Menu Only | Global |
 | Pivot: Search Bytes in VirusTotal | Context Menu | Disassembly (Selection Required) |
 | Pivot: Export Bytes to CyberChef | Context Menu | Disassembly (Selection Required) |
 | Pivot: Search String in VirusTotal | Context Menu | Global (Text Selection) |
