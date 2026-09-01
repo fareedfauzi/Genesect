@@ -2,9 +2,11 @@
 
 **An AI-powered IDA Pro plugin built for reverse engineers and malware analysts.**
 
-PseudoNote Extended takes the grunt work out of reverse engineering. It hooks up Large Language Models directly to IDA Pro's Hex-Rays decompiler to help you rename functions, explain obscure code, recover structures, and generate comprehensive analysis reports. 
+PseudoNote Extended is an extended version of previous PseudoNote I created. It takes the grunt work out of reverse engineering by integrating Large Language Models (LLMs) directly into IDA Pro and the Hex-Rays decompiler. It assists analysts with tasks such as renaming functions and variables, explaining complex or obscure code, recovering structures, and generating comprehensive analysis reports.
 
-Whether you're triaging a massive binary or doing a deep dive into a specific execution chain, this plugin gives you an interactive, AI-driven assistant right in your workspace. Best of all? Everything it generates—notes, symbol renames, AI chats—is saved straight into the IDB using IDA's native NetNodes, so you never lose your progress.
+Inspired by the Gepetto IDA plugin, PseudoNote takes the concept further - essentially Gepetto on steroids - with additional capabilities designed for practical malware analysis and large-scale reverse engineering.
+
+Whether you're triaging a massive binary or performing a deep dive into a specific execution chain, PseudoNote provides an interactive, AI-assisted workflow directly inside your IDA Pro workspace.
 
 ## What's in the box?
 
@@ -31,11 +33,13 @@ pip install openai httpx PySide6
 ### 2. Install the Plugin
 
 **Quick Install (Windows):**
+
 ```powershell
 irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 | iex
 ```
 
 **Quick Install (Linux / macOS):**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
 ```
@@ -62,6 +66,6 @@ Want to dig deeper? Check out the [`docs/`](docs/) folder for all the details:
 
 ## A Note on Safety
 
-By default, the AI starts in read-only mode. We made sure that any IDB-altering actions (like renaming symbols or adding comments) require your explicit approval first. 
+By default, the AI starts in read-only mode. We made sure that any IDB-altering actions (like renaming symbols or adding comments) require your explicit approval first.
 
 *Always remember: AI outputs are educated guesses. Trust, but verify against the actual assembly.*
