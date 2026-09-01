@@ -1,65 +1,67 @@
 # PseudoNote Extended
 
-PseudoNote Extended is an advanced, AI-powered reverse engineering plugin for IDA Pro. Engineered specifically for malware analysts and reverse engineers, it accelerates the analysis process by automating symbol renaming, behavior explanation, code reconstruction, and comprehensive reporting.
+**An AI-powered IDA Pro plugin built for reverse engineers and malware analysts.**
 
-By combining the analytical depth of large language models with the precision of IDA Pro's Hex-Rays decompiler, PseudoNote Extended provides an interactive and autonomous environment for binary analysis. All generated artifacts—including AI analysis, renamed symbols, investigator notes, and chat histories—are persistently stored within the IDA database (IDB) using native NetNodes.
+PseudoNote Extended takes the grunt work out of reverse engineering. It hooks up Large Language Models directly to IDA Pro's Hex-Rays decompiler to help you rename functions, explain obscure code, recover structures, and generate comprehensive analysis reports. 
 
-## Architecture & Core Capabilities
+Whether you're triaging a massive binary or doing a deep dive into a specific execution chain, this plugin gives you an interactive, AI-driven assistant right in your workspace. Best of all? Everything it generates—notes, symbol renames, AI chats—is saved straight into the IDB using IDA's native NetNodes, so you never lose your progress.
 
-PseudoNote Extended is built on a modular architecture that separates static analysis heuristics from AI-driven contextual analysis.
+## What's in the box?
 
-* **Agentic Investigation:** An autonomous analysis engine that systematically investigates functions, gathers evidence across callers and callees, evaluates memory evidence, and synthesizes findings into a structured report.
-* **Deep Analysis Pipeline:** A recursive, bottom-up analysis pipeline that constructs a complete call graph, renames leaf functions before callers, and generates a comprehensive HTML report.
-* **Bulk Processing Engine:** Multi-threaded batch processing for renaming functions and variables at scale, as well as triaging functions based on established malware behavior classifications.
-* **Contextual Chat & Summarization:** A dockable, context-aware interface that enables conversational queries regarding specific functions or bounded execution chains.
-* **Specialized Explorers:** Dedicated static analysis utilities for identifying anti-analysis techniques, process injection, command-and-control structures, dynamic API resolution, and cryptographic routines.
+* **Agentic Investigation:** Hand the AI a mission (like "Find the C2 config logic") and watch it autonomously traverse the call graph, analyze evidence, and synthesize findings into a structured report.
+* **Deep Analysis Pipeline:** Point it at an entry function and let it recursively build a call graph, rename everything bottom-up, and spit out a beautiful HTML report.
+* **Bulk Processing Engine:** Feed it hundreds of unnamed functions or variables and let it batch-rename them based on behavioral heuristics.
+* **Contextual AI Chat:** A dockable chat interface that actually understands the function you're currently looking at.
+* **Tons of Explorers:** Dedicated static analysis utilities for spotting anti-analysis tricks, process injection, dynamic API resolution, crypto routines, and more.
 
 ## Installation
 
-PseudoNote Extended is designed to run alongside classic PseudoNote without namespace collisions.
+PseudoNote Extended runs completely independent of the classic PseudoNote plugin, so you can safely install them side-by-side.
 
-### Prerequisites
+### 1. Install Dependencies
 
-Ensure you have the required Python dependencies installed in the Python environment utilized by your IDA Pro installation:
+You'll need a few Python packages installed in whatever Python environment IDA is using:
 
 ```bash
 pip install openai httpx PySide6
 ```
 
-*(Optional: Install `anthropic` and `google-generativeai` to enable Claude and Gemini provider support).*
+*(Optional: Install `anthropic` and `google-generativeai` if you want Claude or Gemini support).*
 
-### Setup Instructions
+### 2. Install the Plugin
 
 **Quick Install (Windows):**
 ```powershell
 irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 | iex
 ```
 
-**Quick Install (Linux and macOS):**
-```sh
+**Quick Install (Linux / macOS):**
+```bash
 curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
 ```
 
-*(For manual installation from a local clone, you can run `install.bat` or `sh install.sh` directly from the repository).*
+*(If you prefer to install manually from a local clone, just run `install.bat` or `sh install.sh` directly from the repo).*
 
-Restart IDA Pro after the installation completes.
+Restart IDA Pro once it's done!
 
 ## Configuration
 
-Settings are accessible via the context menu in the Pseudocode or IDA-View windows: **Right-Click > PseudoNote > Settings**.
+To hook up your API keys, just right-click anywhere in the Pseudocode or IDA-View windows and hit **PseudoNote > Settings**.
 
-1. Navigate to the **AI Assistant** tab.
-2. Select your preferred provider (OpenAI, LM Studio, Ollama, DeepSeek, etc.).
-3. Input the required endpoint URL, model identifier, and API key.
-4. Execute **Test Connection** to validate the configuration.
-5. Click **Save** to apply changes immediately.
+From there, you can select your provider (OpenAI, LM Studio, Ollama, DeepSeek, etc.), plug in your endpoint/key, and hit **Test Connection**. Your settings take effect immediately upon saving.
 
-## Documentation Reference
+## Documentation
 
-Comprehensive documentation and detailed workflows are located in the `docs/` directory:
+Want to dig deeper? Check out the [`docs/`](docs/) folder for all the details:
 
-* [**Getting Started**](docs/getting-started.md) - System requirements, detailed installation procedures, and workspace initialization.
-* [**Features Overview**](docs/features-overview.md) - Action registry, context availability, and default keyboard shortcuts.
-* [**AI Assistant Workflows**](docs/ai-assistant.md) - Methodologies for interactive chat, autonomous investigation, and automated renaming.
-* [**Utilities & Explorers**](docs/utilities.md) - Documentation on the Hex Viewer, Call Tree, and specialized static analysis explorers.
-* [**Analysis Pipelines**](docs/pipelines.md) - Architectural overview of the Deep Analyzer and Bulk Analyzer pipelines.
+* [**Getting Started**](docs/getting-started.md) - Full installation steps, troubleshooting, and IDB migration.
+* [**Features & Hotkeys**](docs/features-overview.md) - A cheat sheet of every action and shortcut.
+* [**AI Assistant Workflows**](docs/ai-assistant.md) - How to use the chat, autonomous agent, and bulk renamers.
+* [**Utilities & Explorers**](docs/utilities.md) - Guides on the Hex Viewer, Call Tree, and malware explorers.
+* [**Analysis Pipelines**](docs/pipelines.md) - Under the hood of the Deep & Bulk Analyzers.
+
+## A Note on Safety
+
+By default, the AI starts in read-only mode. We made sure that any IDB-altering actions (like renaming symbols or adding comments) require your explicit approval first. 
+
+*Always remember: AI outputs are educated guesses. Trust, but verify against the actual assembly.*
