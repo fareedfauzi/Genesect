@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+PseudoNoteExtended.ini
+.idea/
+.vscode/
+dist/
