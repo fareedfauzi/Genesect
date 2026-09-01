@@ -1,86 +1,101 @@
-# Installation, settings, and workspace
+# Installation and Workspace Initialization
 
-## Install on Windows
+## 1. Dependency Resolution
 
-From the project directory, run:
+PseudoNote Extended requires a standardized Python environment. All dependencies must be installed within the Python interpreter utilized by your IDA Pro installation.
+
+Execute the following command in your terminal:
+
+```bash
+pip install openai httpx PySide6
+```
+
+*(Optional: Install `anthropic` and `google-generativeai` to enable support for Claude and Google Gemini API endpoints).*
+
+### Linux Environment Considerations
+
+IDA Pro natively utilizes the system-wide Python environment. Modern Linux distributions (e.g., Debian 12+, Ubuntu 23.04+) enforce PEP 668, blocking system-wide `pip` installations to prevent package manager conflicts.
+
+**Method A: Direct Installation via Pip (Recommended for Analysis VMs)**  
+Append the override flag to force installation into the system environment:
+
+```bash
+pip install openai httpx PySide6 --break-system-packages
+```
+
+**Method B: Installation via System Package Manager (Debian/Ubuntu)**  
+Install the dependencies using `apt` if they are available in your distribution's repository:
+
+```bash
+sudo apt update
+sudo apt install python3-httpx python3-openai python3-pyside6.qtcore python3-pyside6.qtgui python3-pyside6.qtwidgets
+```
+
+## 2. Plugin Installation
+
+### Windows Environments
+
+Navigate to the project directory and execute the batch installer:
 
 ```bat
 install.bat
 ```
 
-The portable installer uses `%IDAUSR%\plugins` when `IDAUSR` is defined; otherwise it uses `%APPDATA%\Hex-Rays\IDA Pro\plugins`. To install into a particular copy of IDA, pass its plugin directory:
+The installer dynamically resolves the target directory, prioritizing `%IDAUSR%\plugins` if defined, falling back to `%APPDATA%\Hex-Rays\IDA Pro\plugins`. To force installation into a specific directory, provide the absolute path as an argument:
 
 ```bat
-install.bat "D:\Tools\IDA\plugins"
+install.bat "C:\Path\To\IDA\plugins"
 ```
 
-The fixed-path `install_pseudonote_extended_ida83.bat` and `install_pseudonote_extended_ida93.bat` scripts are retained for local testing.
+### Linux and macOS Environments
 
-## Install on Linux or macOS
+Execute the shell installer script:
 
 ```sh
 sh install.sh
 ```
 
-The script honors `$IDAUSR`. Without it, the default is `~/.idapro/plugins` on Linux and `~/Library/Application Support/Hex-Rays/IDA Pro/plugins` on macOS. A custom plugin directory can be passed as the first argument.
+The script respects the `$IDAUSR` environment variable. Default fallbacks are `~/.idapro/plugins` (Linux) and `~/Library/Application Support/Hex-Rays/IDA Pro/plugins` (macOS).
 
-Restart IDA after installing or updating the plugin.
+**Ensure IDA Pro is restarted following a successful installation.**
 
-## Settings
+## 3. Configuration Parameters
 
-Settings appears directly under **right-click > PseudoNote > Settings**. Use its **Bookmarks** tab to search all features and choose the shortcuts shown under **PseudoNote > Bookmarks**. The AI Assistant and Utilities trees remain the complete organized feature catalog.
+Settings are managed via the context menu: **Right-Click > PseudoNote > Settings**.
 
-Open **right-click > PseudoNote > AI Assistant > Settings...**.
+1. Navigate to the **AI Assistant** tab to select the target AI provider.
+2. Supply the necessary connection parameters (Base URL, Model Name, API Key).
+3. Tune operational parameters including request timeout limits, maximum output tokens, and proxy settings.
+4. Execute **Test Connection** to validate the endpoint reachability and authentication.
+5. Save the configuration. Changes are immediately applied to the runtime client.
 
-1. Select the provider.
-2. Enter its base URL, model, and API key when the provider requires one.
-3. Adjust timeout, output-token limit, retry behavior, and proxy if necessary.
-4. Click **Test Connection**.
-5. Click **Save**. The runtime AI client is rebuilt immediately; restarting IDA is not required.
+**Note:** Local providers (e.g., LM Studio, Ollama) may operate without an API key, whereas remote enterprise endpoints will require valid authentication tokens. If the plugin lacks write access to the IDA installation directory, configuration state will safely fallback to `~/.pseudonote-extended.ini`.
 
-Local OpenAI-compatible servers such as LM Studio and Ollama may not require a real API key. Settings can be saved without a key, although hosted services normally require one to make requests.
+Additional configuration tabs dictate UI rendering (fonts, syntax highlighting), concurrent worker limits, batch processing sizes, API rate-limit cooldowns, and behavioral parameters for the Deep Analyzer.
 
-The remaining Settings tabs control fonts, workspace appearance, bulk worker counts, batch sizes, cooldowns, naming behavior, and Deep Analyzer options. A cooldown of `0` disables PseudoNote's deliberate inter-request delay; provider-side HTTP 429 responses may still require retry backoff.
+## 4. Workspace Management
 
-## Open Readable Code
+### Readable Code Reconstruction
 
-Use **AI Assistant > Analyst Notes > Open Readable Code** on the current function.
+Navigate to a target function and invoke **AI Assistant > Analyst Notes > Open Readable Code**.
 
-1. Choose the source view or generated-code tab.
-2. Generate a readable C rewrite when desired.
-3. Review the result and save it to the IDB.
-4. Use the language selector and editor for manual refinement.
+This interface facilitates the generation of high-level, human-readable C (or other targeted languages) via AI-driven reconstruction of the Hex-Rays pseudocode. The generated code is persistently stored within the IDB and serves as an analytical aid.
 
-Generated code is an analyst aid, not a replacement for the original Hex-Rays output.
+### Analyst Documentation
 
-## Open Analyst Notes
+Invoke **Open Analyst Notes** to instantiate a per-function Markdown editor.
 
-Use **Open Analyst Notes** to maintain per-function Markdown notes.
+This facility allows analysts to document hypotheses, record Indicators of Compromise (IOCs), and maintain contextual notes directly tied to the function's address within the IDB. The interface supports standard Markdown formatting and live preview rendering.
 
-1. Navigate to a function.
-2. Enter observations, hypotheses, IOCs, or follow-up items.
-3. Save the note; it is stored in the IDB for that function.
-4. Switch between edit and preview modes as needed.
+### Artifact Retrieval
 
-The Explanation, Execution Flow, Function Intelligence, and Custom Prompt tabs provide additional function-focused AI workflows. Custom Prompt can include pseudocode, assembly, or both.
+The **Browse Saved Artifacts** utility enumerates all functions within the IDB that contain saved readable code or analyst notes, providing a centralized index for rapid navigation across documented components.
 
-## Browse Saved Artifacts
+## 5. Legacy Data Migration
 
-Use **Browse Saved Artifacts** to find functions with saved readable code or analyst notes.
+For users migrating from the classic PseudoNote implementation, execute the **Migrate Classic PseudoNote Data...** utility.
 
-1. Open the artifact list.
-2. Search or select a saved item.
-3. Navigate to its function and reopen the corresponding workspace.
-
-## Migrate Classic PseudoNote Data
-
-If the migration command is exposed by your build, run **Migrate Classic PseudoNote Data...** once on a backed-up IDB.
-
-1. Review the detected legacy data.
-2. Start migration.
-3. Verify readable code and notes in the Extended workspaces.
-4. Retain the original IDB until verification is complete.
-
-## UI Component Preview
-
-**UI Component Preview...** is primarily a theme/development aid. It displays shared buttons, fields, states, and typography without changing the IDB.
+1. Ensure the IDB is backed up prior to execution.
+2. Review the enumerated legacy artifacts.
+3. Initiate the migration sequence to transfer data into the Extended namespace.
+4. Verify the integrity of the migrated readable code and notes within the new workspace interfaces.

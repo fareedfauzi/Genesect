@@ -1,33 +1,54 @@
-# PseudoNote Extended tutorials
+# PseudoNote Extended Documentation
 
-These guides explain the features available from the **right-click > PseudoNote** menu in IDA. Its root contains **Settings**, **AI Assistant**, **Utilities**, and a configurable **Bookmarks** submenu. Some commands are view-specific: pseudocode actions require a Hex-Rays pseudocode window, while byte-selection actions require a selection in the disassembly view.
+This documentation details the functionality and operational procedures for the PseudoNote Extended plugin within IDA Pro. The primary interface is accessible via the context menu (Right-Click > PseudoNote) in both the Pseudocode and Disassembly views.
 
-## Start here
+The toolset is categorized into four primary domains: Settings, AI Assistant, Utilities, and a customizable Bookmarks submenu for rapid access to frequently used commands.
 
-1. [Installation, settings, and workspace](getting-started.md) — install the plugin, configure an AI provider, migrate classic data, and use notes and saved artifacts.
-2. [AI assistant tutorials](ai-assistant.md) — chat, autonomous investigation, summarization, bulk workflows, renaming, types, and comments.
-3. [Utility tutorials](utilities.md) — navigation, program-structure explorers, malware-analysis explorers, search, export, and IDB maintenance.
+## Documentation Index
 
-## Recommended first workflow
+1. [**Getting Started**](getting-started.md)
+   - Dependency installation for Windows, Linux, and macOS
+   - AI provider configuration
+   - Workspace initialization
+   - Legacy data migration procedures
 
-1. Open a binary and wait for IDA auto-analysis to finish.
-2. Right-click in pseudocode and select **PseudoNote > AI Assistant > Settings...**.
-3. Configure and test an AI provider, then save. Saved provider changes take effect immediately.
-4. Open **Chat About This Function** for interactive analysis, or **Autonomous Investigation** for a bounded multi-step investigation.
-5. Keep **Enable IDA changes** off until you are ready to review proposed names, types, or comments.
-6. Use **Change History and Undo Explorer** to inspect and selectively roll back recorded changes.
+2. [**Features Overview**](features-overview.md)
+   - Comprehensive action registry
+   - Keyboard shortcuts and view context requirements
 
-## Safety model
+3. [**AI Assistant Workflows**](ai-assistant.md)
+   - Interactive analysis via the Chat interface
+   - Autonomous Function Investigation
+   - Bulk symbol and variable renaming procedures
+   - Automated code commenting and prototype inference
 
-- Treat AI output as a hypothesis until verified against pseudocode, disassembly, cross-references, and data.
-- Autonomous Investigation starts read-only. IDA-changing tools require explicit enablement and review.
-- Bulk tools show proposals or results before database changes whenever the underlying IDA API permits it.
-- External pivot searches open third-party services and may disclose the selected text or bytes to those services.
-- String decoding and shellcode features are static-analysis helpers; do not execute untrusted samples on a production system.
+4. [**Utilities & Explorers**](utilities.md)
+   - Navigational aids including the Hex Viewer and Call Tree
+   - Structural and malware-specific static analysis explorers
+   - Signature generation and external pivoting utilities
 
-## Terminology
+5. [**Analysis Pipelines**](pipelines.md)
+   - Architecture and execution flow of the Deep Analyzer
+   - Architecture and execution flow of the Bulk Analyzer
 
-- **Current function**: the function containing the cursor when a command starts.
-- **Function chain**: a bounded caller/callee graph rooted at an entry function.
-- **IDB**: IDA's analysis database containing names, types, comments, and PseudoNote artifacts.
-- **Reviewed change**: an IDA mutation explicitly accepted by the analyst.
+## Operational Paradigm
+
+1. Allow IDA Pro's initial auto-analysis to conclude before invoking complex plugin operations.
+2. Ensure the AI provider is properly configured and tested via the Settings menu prior to analysis.
+3. Utilize the Chat interface or Autonomous Investigation for preliminary triage of complex functions.
+4. Maintain a read-only stance for all AI-driven tools until the generated proposals (names, types, comments) have been manually reviewed.
+5. Utilize the built-in Change History and Undo Explorer to manage and revert modifications to the IDB.
+
+## Security Model & Data Integrity
+
+- **Validation Requirement:** All AI-generated outputs are heuristic proposals. They must be validated against the underlying assembly, cross-references, and runtime data before acceptance.
+- **Explicit Modification:** Autonomous agents and batch processors operate in a read-only capacity by default. State mutations within the IDB require explicit configuration and analyst review.
+- **External Communications:** Search pivots and external querying tools transmit selected data to third-party services. Analysts must verify that selected data does not violate operational security policies prior to transmission.
+- **Static Analysis Constraints:** Features such as shellcode analysis and string decryption operate purely via static analysis and do not execute code on the host system.
+
+## Terminology Reference
+
+- **Current Function:** The subroutine currently containing the cursor focus when an action is invoked.
+- **Function Chain:** A deterministic graph of callers and callees, bounded by depth and node limits, originating from an entry function.
+- **IDB:** The primary IDA Pro database file, serving as the persistent storage mechanism for both native analysis data and PseudoNote Extended artifacts (via NetNodes).
+- **Reviewed Change:** A modification to the IDB that has been explicitly authorized by the analyst following AI suggestion.
