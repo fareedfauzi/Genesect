@@ -3,7 +3,7 @@
 PseudoNote Extended implements two primary automated analysis engines: the Deep Analyzer and the Bulk Analyzer. 
 
 *   **Bulk Analyzer:** Optimized for rapid, breadth-first triage of the entire binary.
-*   **Deep Analyzer:** Optimized for thorough, depth-first forensic analysis of a specific execution chain.
+*   **Deep Analyzer:** Optimized for thorough, depth-first analysis of a specific execution chain.
 
 ## Bulk Function Analyzer Pipeline
 
@@ -20,7 +20,7 @@ The Bulk Function Analyzer is designed to quickly classify every function within
 
 ## Deep Analyzer Pipeline
 
-The Deep Analyzer executes a comprehensive, multi-stage recursive analysis originating from a user-defined entry point. It constructs a call graph, performs bottom-up symbolic renaming, conducts behavioral analysis, and synthesizes a standalone HTML forensic report.
+The Deep Analyzer executes a comprehensive, multi-stage recursive analysis originating from a user-defined entry point. It constructs a call graph, performs bottom-up symbolic renaming, conducts behavioral analysis, and synthesizes a standalone HTML report.
 
 ### Phase 1: Discovery & Preparation
 
@@ -39,14 +39,14 @@ The Deep Analyzer executes a comprehensive, multi-stage recursive analysis origi
     Re-evaluates each function utilizing the behavioral context derived from its callers. This stage upgrades benign-looking utility functions called maliciously, downgrades false positives, and propagates behavioral intent across the execution chain.
 *   **Stage 6: Data Synthesis**
     Aggregates the analytical output, extracts functional Indicators of Compromise (IOCs), maps behaviors to the MITRE ATT&CK framework, and generates the data structures required for visualization.
-*   **Stage 7: Forensic Report Generation**
+*   **Stage 7: Analysis Report Generation**
     Compiles a self-contained HTML report detailing the executive summary, MITRE ATT&CK coverage, function-level risk assessments, extracted IOCs, and interactive control flow diagrams. The report is deposited in the initialized workspace directory.
 
 ## Pipeline Comparison
 
 | Specification | Bulk Function Analyzer | Deep Analyzer |
 |---|---|---|
-| **Objective** | Breadth-first triage and classification | Depth-first forensic investigation |
+| **Objective** | Breadth-first triage and classification | Depth-first deep investigation |
 | **Operational Scope** | Flat enumeration of all IDB functions | Bounded recursive graph from entry point |
 | **Analytical Depth** | Single-pass evaluation | Multi-stage contextual refinement |
 | **Variable Renaming** | No | Yes (Bottom-up) |

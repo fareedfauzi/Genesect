@@ -1,6 +1,6 @@
 # PseudoNote Extended
 
-PseudoNote Extended is an advanced, AI-powered reverse engineering plugin for IDA Pro. Engineered specifically for malware analysts and reverse engineers, it accelerates the analysis process by automating symbol renaming, behavior explanation, code reconstruction, and forensic reporting.
+PseudoNote Extended is an advanced, AI-powered reverse engineering plugin for IDA Pro. Engineered specifically for malware analysts and reverse engineers, it accelerates the analysis process by automating symbol renaming, behavior explanation, code reconstruction, and comprehensive reporting.
 
 By combining the analytical depth of large language models with the precision of IDA Pro's Hex-Rays decompiler, PseudoNote Extended provides an interactive and autonomous environment for binary analysis. All generated artifacts—including AI analysis, renamed symbols, investigator notes, and chat histories—are persistently stored within the IDA database (IDB) using native NetNodes.
 
@@ -9,7 +9,7 @@ By combining the analytical depth of large language models with the precision of
 PseudoNote Extended is built on a modular architecture that separates static analysis heuristics from AI-driven contextual analysis.
 
 * **Agentic Investigation:** An autonomous analysis engine that systematically investigates functions, gathers evidence across callers and callees, evaluates memory evidence, and synthesizes findings into a structured report.
-* **Deep Analysis Pipeline:** A recursive, bottom-up analysis pipeline that constructs a complete call graph, renames leaf functions before callers, and generates a comprehensive HTML forensic report.
+* **Deep Analysis Pipeline:** A recursive, bottom-up analysis pipeline that constructs a complete call graph, renames leaf functions before callers, and generates a comprehensive HTML report.
 * **Bulk Processing Engine:** Multi-threaded batch processing for renaming functions and variables at scale, as well as triaging functions based on established malware behavior classifications.
 * **Contextual Chat & Summarization:** A dockable, context-aware interface that enables conversational queries regarding specific functions or bounded execution chains.
 * **Specialized Explorers:** Dedicated static analysis utilities for identifying anti-analysis techniques, process injection, command-and-control structures, dynamic API resolution, and cryptographic routines.
@@ -30,25 +30,17 @@ pip install openai httpx PySide6
 
 ### Setup Instructions
 
-**Windows environments:**
-Execute the provided batch script from the project root:
-
-```bat
-install.bat
+**Quick Install (Windows):**
+```powershell
+irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 | iex
 ```
 
-To specify a custom IDA plugin directory:
-
-```bat
-install.bat "C:\Path\To\IDA\plugins"
-```
-
-**Linux and macOS environments:**
-Execute the shell script from the project root:
-
+**Quick Install (Linux and macOS):**
 ```sh
-sh install.sh
+curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
 ```
+
+*(For manual installation from a local clone, you can run `install.bat` or `sh install.sh` directly from the repository).*
 
 Restart IDA Pro after the installation completes.
 

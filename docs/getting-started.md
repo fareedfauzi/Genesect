@@ -35,13 +35,18 @@ sudo apt install python3-httpx python3-openai python3-pyside6.qtcore python3-pys
 
 ### Windows Environments
 
-Navigate to the project directory and execute the batch installer:
+**Quick Install (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 | iex
+```
+
+Alternatively, to install from a local repository clone, navigate to the project directory and execute the batch installer:
 
 ```bat
 install.bat
 ```
 
-The installer dynamically resolves the target directory, prioritizing `%IDAUSR%\plugins` if defined, falling back to `%APPDATA%\Hex-Rays\IDA Pro\plugins`. To force installation into a specific directory, provide the absolute path as an argument:
+The local installer dynamically resolves the target directory, prioritizing `%IDAUSR%\plugins` if defined, falling back to `%APPDATA%\Hex-Rays\IDA Pro\plugins`. To force local installation into a specific directory, provide the absolute path as an argument:
 
 ```bat
 install.bat "C:\Path\To\IDA\plugins"
@@ -49,13 +54,18 @@ install.bat "C:\Path\To\IDA\plugins"
 
 ### Linux and macOS Environments
 
-Execute the shell installer script:
+**Quick Install (Shell):**
+```sh
+curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
+```
+
+Alternatively, to install from a local repository clone, execute the shell installer script:
 
 ```sh
 sh install.sh
 ```
 
-The script respects the `$IDAUSR` environment variable. Default fallbacks are `~/.idapro/plugins` (Linux) and `~/Library/Application Support/Hex-Rays/IDA Pro/plugins` (macOS).
+The local script respects the `$IDAUSR` environment variable. Default fallbacks are `~/.idapro/plugins` (Linux) and `~/Library/Application Support/Hex-Rays/IDA Pro/plugins` (macOS).
 
 **Ensure IDA Pro is restarted following a successful installation.**
 

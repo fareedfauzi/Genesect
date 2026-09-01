@@ -28,6 +28,12 @@ echo Synchronizing new and modified PseudoNote Extended files into:
 echo   %TARGET_PACKAGE%
 echo.
 
+echo Cleaning up classic PseudoNote installations...
+if exist "%IDA_PLUGINS%\pseudonote.py" del /F /Q "%IDA_PLUGINS%\pseudonote.py"
+if exist "%IDA_PLUGINS%\pseudonote\" rmdir /S /Q "%IDA_PLUGINS%\pseudonote"
+if exist "%IDA_PLUGINS%\pseudonote.ini" del /F /Q "%IDA_PLUGINS%\pseudonote.ini"
+if exist "%USERPROFILE%\.pseudonote.ini" del /F /Q "%USERPROFILE%\.pseudonote.ini"
+
 rem Robocopy automatically copies only files that are new or differ in size/time.
 rem /E includes any future subdirectories; Python bytecode caches are excluded.
 robocopy "%SOURCE_DIR%pseudonote_extended" "%TARGET_PACKAGE%" /E /R:2 /W:1 /COPY:DAT /DCOPY:DAT /XD __pycache__ /XF *.pyc *.pyo

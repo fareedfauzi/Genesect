@@ -68,7 +68,7 @@ PseudoNote Extended actions are accessible primarily via the context menu within
 *   **Contextual Chat:** A persistent, function-aware conversational interface.
 *   **Bulk Renaming Engines:** High-throughput batch processors for renaming functions and variables autonomously.
 *   **Bulk Function Analyzer:** Rapid triage engine that classifies functions against known malicious behavior taxonomies.
-*   **Deep Analyzer:** A comprehensive, multi-stage pipeline that traverses call graphs, renames symbols bottom-up, and generates a standalone forensic HTML report.
+*   **Deep Analyzer:** A comprehensive, multi-stage pipeline that traverses call graphs, renames symbols bottom-up, and generates a standalone HTML report.
 *   **Function Chain Summarizer:** Applies Map-Reduce methodologies to synthesize execution flow summaries across complex call graphs.
 *   **FLOSS Integration:** Automates the extraction of stack-constructed, tightly-looped, and obfuscated strings via FireEye Labs Obfuscated String Solver.
 *   **Shellcode Analysis:** Performs static capability analysis on raw byte sequences.
