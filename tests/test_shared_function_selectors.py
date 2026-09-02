@@ -22,8 +22,15 @@ class SharedFunctionSelectorTests(unittest.TestCase):
         for source in (SUMMARIZER, DEEP):
             self.assertIn("SearchableFunctionSelector", source)
             self.assertIn("functionSelected.connect(self.on_entry_function_selected)", source)
+            self.assertIn("self.entry_selector.create_dropdown_button(target_group)", source)
+            self.assertIn("target_layout.addWidget(self.entry_dropdown_btn)", source)
             self.assertIn("self.entry_selector.set_function(self.entry_ea)", source)
             self.assertNotIn("self.entry_edit = QLineEdit()", source)
+
+    def test_shared_selector_dropdown_button_opens_popup(self):
+        self.assertIn("def create_dropdown_button", SELECTOR)
+        self.assertIn("button.clicked.connect(self.showPopup)", SELECTOR)
+        self.assertIn('button.setAccessibleName("Show entry function list")', SELECTOR)
 
     def test_chain_chat_also_exposes_searchable_all_function_dropdown(self):
         self.assertIn("self.entry_combo = QtWidgets.QComboBox()", CHAIN)

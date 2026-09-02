@@ -23,9 +23,9 @@ class AgenticSkillCatalogTests(unittest.TestCase):
         self.assertIn("max(1, min(int(max_items or 200), 1000))", SOURCE)
 
     def test_autonomous_triage_uses_overview_and_decompiler_first(self):
-        self.assertIn("First obtain a compact binary_overview", SOURCE)
-        self.assertIn("then decompile the", SOURCE)
-        self.assertIn("only to resolve specific uncertainties", SOURCE)
+        self.assertIn("First obtain binary_overview", SOURCE)
+        self.assertIn("function_evidence plus decompile", SOURCE)
+        self.assertIn("Use deeper tools for suspicious or structurally important functions", SOURCE)
 
 
 if __name__ == "__main__":

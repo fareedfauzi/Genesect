@@ -25,6 +25,37 @@ AI_CANCEL_REQUESTED = False
 _REQUEST_IDS = itertools.count(1)
 _BUSY_LOCK = threading.Lock()
 
+_CONTEXT_LIMIT_ERROR_MARKERS = (
+    "context length",
+    "context window",
+    "maximum context",
+    "trying to keep the first",
+    "prompt is too long",
+    "context_length_exceeded",
+    "too many tokens",
+)
+
+
+def _format_provider_error(provider, model, request_id, error):
+    """Build a clear IDA Output diagnostic for a failed provider request."""
+    detail = str(error).strip() or type(error).__name__
+    normalized = detail.lower()
+    context_limit = any(marker in normalized for marker in _CONTEXT_LIMIT_ERROR_MARKERS)
+    category = "MODEL CONTEXT ERROR" if context_limit else "AI PROVIDER ERROR"
+    explanation = (
+        "The model server rejected the prompt because it exceeds the model's loaded "
+        "context window. This is not a PseudoNote plugin failure."
+        if context_limit else
+        "The request failed while communicating with the configured AI provider."
+    )
+    return (
+        f"\n[PseudoNote] [{category}] Request {request_id}\n"
+        f"  Provider: {provider}\n"
+        f"  Model: {model or '<not configured>'}\n"
+        f"  Explanation: {explanation}\n"
+        f"  Provider details: {detail}\n"
+    )
+
 
 def _quiet_optional_import(module_name):
     """Import an optional provider without leaking its dependency diagnostics."""
@@ -565,6 +596,13 @@ class SimpleAI:
                 LOGGER.log(f"AI Error ({self.provider}): {e}")
                 err_str = str(e).lower()
                 is_throttle = any(x in err_str for x in ["429", "too many requests", "quota", "rate limit"])
+                output_message = _format_provider_error(
+                    self.profile.name,
+                    self.profile.model,
+                    request_id,
+                    e,
+                )
+                safe_execute(lambda text=output_message: print(text))
                 
                 def _do_err():
                     invoke_callback(

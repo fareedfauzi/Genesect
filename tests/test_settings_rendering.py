@@ -32,18 +32,15 @@ class SettingsRenderingTests(unittest.TestCase):
         self.assertNotIn("stabilize_widget_rendering", workspace)
         self.assertIn('QWidget[pnMacWorkspace="true"]', workspace)
         self.assertIn("ThemeManager(self, \"system\")", proposals)
-        self.assertIn("super().__init__(None)", proposals)
-        self.assertIn("super().__init__(None)", VIEW)
+        self.assertIn("super().__init__(parent)", proposals)
         self.assertIn("self.setMinimumWidth(860)", VIEW)
         self.assertNotIn("self.setWindowModality(QtCore.Qt.ApplicationModal)", VIEW)
         self.assertNotIn("def _refresh_first_frame", VIEW)
 
-    def test_pseudocode_settings_uses_safe_disassembly_host(self):
+    def test_settings_does_not_create_workaround_disassembly_host(self):
         handlers = (ROOT / "pseudonote_extended" / "handlers.py").read_text(encoding="utf-8")
-        self.assertIn("source_type == idaapi.BWN_PSEUDOCODE", handlers)
-        self.assertIn('open_disasm_window("PseudoNote Settings Host")', handlers)
-        self.assertIn("activate_widget(source_widget, True)", handlers)
-        self.assertIn("close_widget(safe_widget, close_later)", handlers)
+        self.assertNotIn('open_disasm_window("PseudoNote Settings Host")', handlers)
+        self.assertNotIn("safe_widget", handlers)
 
 
 if __name__ == "__main__":

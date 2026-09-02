@@ -17,13 +17,17 @@ class ChatLogExportTests(unittest.TestCase):
 
     def test_single_and_chain_chat_use_shared_exporter(self):
         self.assertIn("export_chat_log", CHAT)
-        self.assertIn('"tool_audit"', CHAT)
+        self.assertNotIn('"tool_audit"', CHAT)
+        self.assertIn('"context": {"decompiled_characters"', CHAT)
         self.assertIn("export_chat_log", CHAIN)
         self.assertIn('"selected_functions"', CHAIN)
 
-    def test_agent_exports_transcript_session_report_and_audit(self):
-        for marker in ("Export Log", "export_investigation_log", "export_transcript", "session_snapshot", "final_analysis", "tool_audit"):
+    def test_agent_export_is_conversation_only_and_audit_is_separate(self):
+        for marker in ("Export Log", "export_investigation_log", "export_transcript", "Export Autonomous Conversation", "on_view_audit"):
             self.assertIn(marker, AGENT)
+        section = AGENT.split("def export_investigation_log", 1)[1].split("def on_user_chat", 1)[0]
+        for internal in ("session_snapshot", "function_ledger", "tool_audit"):
+            self.assertNotIn(internal, section)
 
     def test_system_prompts_are_excluded_by_default(self):
         self.assertIn("include_system=False", EXPORT)

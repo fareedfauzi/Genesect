@@ -16,6 +16,9 @@ import ida_hexrays
 import ida_bytes
 import ida_nalt
 import ida_ua
+import ida_name
+import hashlib
+import heapq
 try:
     import ida_ida
 except ImportError:  # IDA 8.x exposes this information through idaapi instead.
@@ -32,7 +35,7 @@ import pseudonote_extended.idb_storage as _idb_mod
 from pseudonote_extended.idb_storage import save_to_idb, load_from_idb
 from pseudonote_extended.chat import ChatBubble, ChatInput, get_ida_colors, get_chat_font, markdown_to_html
 from pseudonote_extended.chat_export import export_chat_log
-from pseudonote_extended.renamer import count_sub_calls_fast, is_valid_seg, is_sys_func
+from pseudonote_extended.renamer import count_sub_calls_fast, is_valid_seg, is_sys_func, clean_name
 from pseudonote_extended.agent_policy import AgentPolicy, EXECUTE, PATCH, WRITE_IDB
 from pseudonote_extended.agent_runtime import (
     AgentSession, build_system_prompt, normalize_tool_call, parse_agent_response,
@@ -50,7 +53,6 @@ AGENT_TOOL_CATALOG = {
     "disassemble": "Bounded address-tagged disassembly. Args: ea, max_instructions.",
     "get_xrefs": "Callers and callees for a function. Args: ea.",
     "read_memory": "Bounded mapped bytes and ASCII. Args: ea, size.",
-    "get_vtable_ptrs": "Read a bounded candidate virtual-function pointer table. Args: ea, count.",
     "get_vtable_ptrs": "Read a bounded pointer table. Args: ea, count.",
     "search_strings": "Search IDB strings for URLs, hosts, IPs, or text. Args: query (optional), max_results.",
     "binary_overview": "Compact binary triage: architecture, segments, entry points, imports/exports, and counts. Args: none.",
@@ -65,6 +67,10 @@ AGENT_TOOL_CATALOG = {
     "search_findings": "Recall prior evidence-backed findings. Args: query.",
     "record_finding": "Record an evidence-backed claim. Args: claim, confidence, evidence, tags.",
     "mark_examined": "Mark an address examined or a dead end. Args: ea, disposition, summary.",
+    "record_function_analysis": (
+        "Complete one function after evidence and code were collected. Args: ea, suggested_name (empty keeps the "
+        "existing name), summary (one sentence), confidence (0-100), evidence (list of concrete citations)."
+    ),
     "save_finding": "Persist a claim for later sessions. Args: key, value. Requires IDA changes opt-in.",
     "rename_func": "Rename a function after review. Args: ea, new_name. Requires confirmation.",
     "rename_vars": "Rename local variables after review. Args: ea, renames. Requires confirmation.",
@@ -77,7 +83,7 @@ AGENT_TOOL_CATALOG = {
 FUNCTION_SCOPED_AGENT_TOOLS = {
     "function_info", "decompile", "disassemble", "get_xrefs", "basic_blocks",
     "stack_layout", "function_evidence", "rename_func", "rename_vars",
-    "add_comment", "set_func_type", "mark_examined", "analyze_subfunction",
+    "add_comment", "set_func_type", "mark_examined", "analyze_subfunction", "record_function_analysis",
 }
 
 
@@ -167,6 +173,89 @@ def _collect_prefixed_functions(prefix, max_functions=500):
             results.append({"ea": f"0x{int(ea):X}", "name": name})
             if len(results) >= max_functions:
                 break
+    return results
+
+
+def _collect_all_functions():
+    """Build a callee-first queue; recursive SCCs remain adjacent as cycle groups."""
+    addresses = [int(ea) for ea in idautils.Functions()]
+    address_set = set(addresses)
+    graph = {}
+    for ea in addresses:
+        func = idaapi.get_func(ea)
+        graph[ea] = sorted(
+            int(target) for target in (_interfunction_callees(func) if func else {})
+            if int(target) in address_set and int(target) != ea
+        )
+
+    # Iterative Kosaraju avoids Python's recursion limit on deep call chains.
+    finish, visited = [], set()
+    for root in addresses:
+        if root in visited:
+            continue
+        visited.add(root)
+        stack = [(root, False)]
+        while stack:
+            node, expanded = stack.pop()
+            if expanded:
+                finish.append(node)
+                continue
+            stack.append((node, True))
+            for callee in reversed(graph.get(node, ())):
+                if callee not in visited:
+                    visited.add(callee)
+                    stack.append((callee, False))
+    reverse_graph = {ea: [] for ea in addresses}
+    for caller, callees in graph.items():
+        for callee in callees:
+            reverse_graph[callee].append(caller)
+    components, assigned = [], set()
+    for root in reversed(finish):
+        if root in assigned:
+            continue
+        component, stack = [], [root]
+        assigned.add(root)
+        while stack:
+            node = stack.pop()
+            component.append(node)
+            for caller in reverse_graph.get(node, ()):
+                if caller not in assigned:
+                    assigned.add(caller)
+                    stack.append(caller)
+        components.append(sorted(component))
+
+    component_of = {ea: pos for pos, group in enumerate(components) for ea in group}
+    dependencies = {
+        pos: {component_of[callee] for ea in group for callee in graph.get(ea, ()) if component_of[callee] != pos}
+        for pos, group in enumerate(components)
+    }
+    dependents = {pos: set() for pos in range(len(components))}
+    remaining = {pos: len(required) for pos, required in dependencies.items()}
+    for caller, required in dependencies.items():
+        for callee in required:
+            dependents[callee].add(caller)
+    ready = [pos for pos, count in remaining.items() if count == 0]
+    heapq.heapify(ready)
+    ordered_components = []
+    while ready:
+        component_id = heapq.heappop(ready)
+        ordered_components.append(component_id)
+        for caller in sorted(dependents[component_id]):
+            remaining[caller] -= 1
+            if remaining[caller] == 0:
+                heapq.heappush(ready, caller)
+
+    results = []
+    for order, component_id in enumerate(ordered_components):
+        group = components[component_id]
+        cycle_id = f"cycle-{order + 1}" if len(group) > 1 else ""
+        for ea in group:
+            results.append({
+                "ea": f"0x{ea:X}",
+                "name": idc.get_func_name(ea) or f"sub_{ea:X}",
+                "callees": [f"0x{callee:X}" for callee in graph.get(ea, ())],
+                "cycle": cycle_id,
+            })
     return results
 
 
@@ -702,6 +791,89 @@ def tool_add_comment(ea, comment_text):
     except Exception as e:
         return f"Error adding comment: {e}"
 
+
+_MANAGED_COMMENT_PREFIX = "[PseudoNote] "
+_FUNCTION_ANALYSIS_VERSION = 1
+
+
+def _short_function_summary(value):
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = re.sub(r"(?i)^this function\s+", "", text)
+    if not text:
+        return ""
+    text = text[:280].rstrip(" ,;:")
+    return text if text.endswith((".", "!", "?")) else text + "."
+
+
+def _function_code_fingerprint(ea):
+    func = idaapi.get_func(ea)
+    if not func:
+        return ""
+    material = bytearray(f"{int(func.start_ea):X}:{int(func.end_ea):X}".encode("ascii"))
+    for start, end in idautils.Chunks(func.start_ea):
+        size = max(0, end - start)
+        material.extend(ida_bytes.get_bytes(start, min(size, 4096)) or b"")
+        if size > 4096:
+            material.extend(ida_bytes.get_bytes(max(start, end - 4096), min(size, 4096)) or b"")
+    return hashlib.sha256(bytes(material)).hexdigest()[:24]
+
+
+def _replace_managed_comment(existing, summary):
+    preserved = [
+        line for line in str(existing or "").splitlines()
+        if not line.strip().startswith(_MANAGED_COMMENT_PREFIX)
+    ]
+    managed = _MANAGED_COMMENT_PREFIX + summary if summary else ""
+    return "\n".join([line for line in preserved + [managed] if line]).strip()
+
+
+def _apply_function_name_and_comment(ea, proposed_name, summary):
+    """Apply one reviewed rename/comment transaction on IDA's main thread."""
+    result = {"ok": False, "renamed": False, "commented": False, "error": ""}
+    ea = _agent_ea(ea)
+
+    def apply():
+        original_name = idc.get_func_name(ea) or f"sub_{ea:X}"
+        original_comment = idc.get_func_cmt(ea, 0) or ""
+        final_name = original_name
+        try:
+            if proposed_name and proposed_name != original_name:
+                if not load_from_idb(ea, tag=82):
+                    save_to_idb(ea, original_name, tag=82)
+                if not ida_name.set_name(ea, proposed_name, ida_name.SN_NOWARN | ida_name.SN_FORCE):
+                    raise RuntimeError("IDA rejected the validated function name")
+                if (idc.get_func_name(ea) or "") != proposed_name:
+                    raise RuntimeError("IDA did not retain the validated function name")
+                final_name = proposed_name
+                result["renamed"] = True
+                save_to_idb(ea, "renamed_by_pseudonote", tag=83)
+            updated_comment = _replace_managed_comment(original_comment, summary)
+            if updated_comment != original_comment:
+                if not idc.set_func_cmt(ea, updated_comment, 0):
+                    raise RuntimeError("IDA rejected the managed function comment")
+                if (idc.get_func_cmt(ea, 0) or "") != updated_comment:
+                    raise RuntimeError("IDA did not retain the managed function comment")
+                result["commented"] = True
+            try:
+                ida_hexrays.mark_cfunc_dirty(ea, False)
+            except Exception:
+                try:
+                    ida_hexrays.clear_cached_cfuncs()
+                except Exception:
+                    pass
+            result.update({"ok": True, "final_name": final_name, "original_name": original_name,
+                           "original_comment": original_comment})
+        except Exception as exc:
+            if result["renamed"]:
+                ida_name.set_name(ea, original_name, ida_name.SN_NOWARN | ida_name.SN_FORCE)
+                save_to_idb(ea, "", tag=83)
+                result["renamed"] = False
+            idc.set_func_cmt(ea, original_comment, 0)
+            result["error"] = str(exc)
+
+    idaapi.execute_sync(apply, idaapi.MFF_WRITE)
+    return result
+
 def tool_analyze_subfunction(ea):
     try:
         if type(ea) == str:
@@ -1020,6 +1192,7 @@ class AgenticForm(ida_kernwin.PluginForm):
             pass
         self.history = [self.system_prompt]
         self.export_transcript = []
+        self.protocol_audit = []
         self.is_running = False
         self.is_paused = False
         self.error_count = 0
@@ -1070,7 +1243,7 @@ class AgenticForm(ida_kernwin.PluginForm):
         self.btn_audit.clicked.connect(self.on_view_audit)
         header.add_action(self.btn_audit)
         self.btn_export_log = QtWidgets.QPushButton("Export Log")
-        self.btn_export_log.setToolTip("Export the visible transcript, session state, final report, and tool audit")
+        self.btn_export_log.setToolTip("Export the visible chat conversation and final summary")
         self.btn_export_log.clicked.connect(self.export_investigation_log)
         header.add_action(self.btn_export_log)
         root.addWidget(header)
@@ -1079,7 +1252,7 @@ class AgenticForm(ida_kernwin.PluginForm):
         self.allow_changes_cb.setObjectName("idaChangesToggle")
         self.allow_changes_cb.setChecked(False)
         self.allow_changes_cb.setToolTip(
-            "Allow the agent to propose IDA database changes. Each change still requires your confirmation."
+            "Apply validated bottom-up function names and short PseudoNote comments automatically during analysis."
         )
         self.allow_changes_cb.toggled.connect(lambda checked: setattr(self.policy, "allow_mutations", bool(checked)))
         header.add_action(self.allow_changes_cb)
@@ -1097,6 +1270,20 @@ class AgenticForm(ida_kernwin.PluginForm):
         activity_card.add_widget(self.scroll, 1)
 
         root.addWidget(activity_card, 1)
+
+        progress_row = QtWidgets.QHBoxLayout()
+        self.analysis_progress = QtWidgets.QProgressBar()
+        self.analysis_progress.setRange(0, 1)
+        self.analysis_progress.setValue(0)
+        self.analysis_progress.setTextVisible(False)
+        self.analysis_progress.setMinimumHeight(8)
+        self.analysis_progress.setMaximumHeight(8)
+        self.analysis_progress.setToolTip("Host-verified autonomous coverage")
+        progress_row.addWidget(self.analysis_progress, 1)
+        self.analysis_progress_label = QtWidgets.QLabel("0 / 0 processed")
+        self.analysis_progress_label.setProperty("pnMuted", True)
+        progress_row.addWidget(self.analysis_progress_label)
+        root.addLayout(progress_row)
 
         steer_card = Card()
         steer_card.setObjectName("steerCard")
@@ -1169,17 +1356,38 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 """)
 
     def _refresh_agent_dashboard(self):
+        processed = 0
+        total = 0
+        if getattr(self, "_task_profile", "") == "autonomous_full":
+            total = len(getattr(self, "_task_targets", []))
+            target_eas = {item["ea"] for item in getattr(self, "_task_targets", [])}
+            covered = sum(
+                1 for ea, item in self.session.function_memory.items()
+                if ea in target_eas and item.get("state") in ("analyzed", "applied")
+            )
+            scoped_memory = [item for ea, item in self.session.function_memory.items() if ea in target_eas]
+            renamed = sum(1 for item in scoped_memory if item.get("rename_applied"))
+            commented = sum(1 for item in scoped_memory if item.get("comment_applied"))
+            failed = sum(1 for item in scoped_memory if item.get("state") in ("failed", "apply_failed"))
+            processed = covered + sum(1 for item in scoped_memory if item.get("state") == "failed")
+            coverage_text = f"{covered:,}/{total:,} analyzed  •  {renamed:,} renamed  •  {commented:,} commented"
+            if failed:
+                coverage_text += f"  •  {failed:,} need attention"
+        else:
+            coverage_text = f"{len(self.session.examined):,} examined"
+        if hasattr(self, "analysis_progress"):
+            self.analysis_progress.setRange(0, max(1, total))
+            self.analysis_progress.setValue(min(processed, total))
+            self.analysis_progress_label.setText(f"{processed:,} / {total:,} processed")
         if hasattr(self, "session_summary_label"):
             self.session_summary_label.setText(
-                f"{self.policy.steps:,} steps  •  {len(self.session.examined):,} examined  •  {len(self.session.findings):,} findings"
+                f"{self.policy.steps:,} steps  •  {coverage_text}  •  {len(self.session.findings):,} findings"
             )
             return
         if not hasattr(self, "coverage_value"):
             return
         self.phase_value.setText(str(self.session.phase or "triage").replace("_", " ").title())
-        self.coverage_value.setText(
-            f"{len(self.session.examined):,} examined  •  {len(self.session.findings):,} findings"
-        )
+        self.coverage_value.setText(f"{coverage_text}  •  {len(self.session.findings):,} findings")
         self.budget_value.setText(f"{self.policy.steps:,} / {self.policy.max_steps:,} tool steps")
         lines = []
         for finding in self.session.findings[-20:]:
@@ -1310,14 +1518,23 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         layout = QtWidgets.QVBoxLayout(dialog)
         viewer = QtWidgets.QPlainTextEdit()
         viewer.setReadOnly(True)
-        viewer.setPlainText(self.policy.export_json())
+        def audit_text():
+            try:
+                tool_audit = json.loads(self.policy.export_json())
+            except Exception:
+                tool_audit = self.policy.export_json()
+            return json.dumps({
+                "tool_audit": tool_audit,
+                "model_protocol": self.protocol_audit,
+            }, ensure_ascii=False, indent=2)
+        viewer.setPlainText(audit_text())
         layout.addWidget(viewer)
         save_btn = QtWidgets.QPushButton("Export JSON")
         def save_audit():
             path, _ = QtWidgets.QFileDialog.getSaveFileName(dialog, "Export Agent Audit", "agent_audit.json", "JSON (*.json)")
             if path:
                 with open(path, "w", encoding="utf-8") as stream:
-                    stream.write(self.policy.export_json())
+                    stream.write(audit_text())
         save_btn.clicked.connect(save_audit)
         layout.addWidget(save_btn)
         dialog.exec_()
@@ -1333,12 +1550,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         return answer == QtWidgets.QMessageBox.Yes
 
     def export_investigation_log(self):
-        try:
-            audit = json.loads(self.policy.export_json())
-        except Exception:
-            audit = self.policy.export_json()
         path = export_chat_log(
-            self.parent, "Export Autonomous Investigation Log", f"autonomous_investigation_{self.address:X}.md",
+            self.parent, "Export Autonomous Conversation", f"autonomous_conversation_{self.address:X}.md",
             {
                 "title": "Autonomous Investigation", "mode": "autonomous_investigation",
                 "function": self.function_name, "address": f"0x{self.address:X}",
@@ -1346,16 +1559,10 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 "tool_steps": self.policy.steps,
             },
             self.export_transcript,
-            {
-                "session_snapshot": self.session.snapshot(max_chars=100000),
-                "final_analysis": getattr(self.session, "final_report", ""),
-                "tool_audit": audit,
-                "ida_changes_enabled": bool(self.allow_changes_cb.isChecked()),
-            },
         )
         if path:
             self.agent_status_badge.setToolTip("Investigation log exported to %s" % path)
-            ida_kernwin.msg("[PseudoNote] Autonomous investigation log exported to %s\n" % path)
+            ida_kernwin.msg("[PseudoNote] Autonomous conversation exported to %s\n" % path)
 
     def on_user_chat(self, text):
         text = text.strip()
@@ -1461,31 +1668,177 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
     def scroll_to_bottom(self):
         self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum())
 
+    def _pending_coverage_targets(self):
+        if self._task_profile != "autonomous_full":
+            return []
+        pending = []
+        for target in self._task_targets:
+            ea = target["ea"]
+            memory = self.session.function_memory.get(ea, {})
+            terminal = memory.get("state") in ("analyzed", "applied", "failed")
+            writes_complete = (
+                memory.get("state") == "failed"
+                or not self.policy.allow_mutations
+                or memory.get("state") == "applied"
+            )
+            if not (terminal and memory.get("state") != "stale" and writes_complete):
+                pending.append(target)
+        return pending
+
+    def _ready_coverage_targets(self, limit=1):
+        """Return only pending functions whose external SCC dependencies are terminal."""
+        pending = self._pending_coverage_targets()
+        ready = []
+        for target in pending:
+            cycle = target.get("cycle", "")
+            dependencies_ready = True
+            for callee in target.get("callees", []):
+                callee_target = getattr(self, "_target_by_ea", {}).get(callee)
+                if cycle and callee_target and callee_target.get("cycle") == cycle:
+                    continue
+                state = self.session.function_memory.get(callee, {}).get("state")
+                terminal = state in ("analyzed", "applied", "failed")
+                writes_complete = (
+                    state == "failed" or not self.policy.allow_mutations or state == "applied"
+                )
+                if not (terminal and writes_complete):
+                    dependencies_ready = False
+                    break
+            if dependencies_ready:
+                ready.append(target)
+                if len(ready) >= limit:
+                    break
+        # Defensive cycle-breaker: malformed IDA graphs must not deadlock the queue.
+        return ready or pending[:1]
+
+    def _invalidate_stale_function_memory(self):
+        """Fingerprint completed records once per start, never on every UI refresh."""
+        conflicts = 0
+        stale = set()
+        for target in self._task_targets:
+            ea = target["ea"]
+            memory = self.session.function_memory.get(ea)
+            if not memory or memory.get("state") not in ("analyzed", "applied", "failed"):
+                continue
+            current_name = idc.get_func_name(_agent_ea(ea)) or ea
+            if memory.get("current_name") and current_name != memory.get("current_name"):
+                memory["state"] = "failed"
+                memory["last_error"] = "Manual function rename conflicts with the saved autonomous decision."
+                conflicts += 1
+                continue
+            if memory.get("comment_applied"):
+                current_comment = idc.get_func_cmt(_agent_ea(ea), 0) or ""
+                expected = _MANAGED_COMMENT_PREFIX + str(memory.get("summary", ""))
+                if expected and expected not in current_comment.splitlines():
+                    memory["state"] = "failed"
+                    memory["last_error"] = "The managed function comment was edited or removed manually."
+                    conflicts += 1
+                    continue
+            current = _function_code_fingerprint(_agent_ea(ea))
+            if (
+                not current
+                or current != memory.get("code_fingerprint")
+                or memory.get("analysis_version") != _FUNCTION_ANALYSIS_VERSION
+            ):
+                memory["state"] = "stale"
+                memory["last_error"] = "Function code or autonomous analysis version changed."
+                self.session.invalidate_function_cache(ea)
+                stale.add(ea)
+        # A changed callee invalidates every already-analyzed caller that used
+        # its old semantic name/summary, including transitive callers.
+        changed = True
+        while changed:
+            changed = False
+            for target in self._task_targets:
+                ea = target["ea"]
+                memory = self.session.function_memory.get(ea)
+                if ea in stale or not memory or memory.get("state") not in ("analyzed", "applied"):
+                    continue
+                if any(callee in stale for callee in target.get("callees", [])):
+                    memory["state"] = "stale"
+                    memory["last_error"] = "A callee changed and caller context must be refreshed."
+                    self.session.invalidate_function_cache(ea)
+                    stale.add(ea)
+                    changed = True
+        if conflicts:
+            self.add_message(
+                f"{conflicts:,} prior function change(s) conflict with manual IDA edits and need review; they were not overwritten.",
+                is_user=False,
+            )
+
+    def _coverage_batch_text(self, batch_size=1):
+        pending = self._pending_coverage_targets()
+        total = len(self._task_targets) if self._task_profile == "autonomous_full" else 0
+        covered = total - len(pending)
+        if pending:
+            self.session.phase = "analyzing_cycles" if pending[0].get("cycle") else (
+                "analyzing_leaves" if covered == 0 else "analyzing_callers"
+            )
+        else:
+            self.session.phase = "final_validation"
+        batch = []
+        for target in self._ready_coverage_targets(batch_size):
+            item = dict(target)
+            known_callees = []
+            for callee in target.get("callees", [])[:12]:
+                memory = self.session.function_memory.get(callee, {})
+                if memory.get("summary"):
+                    known_callees.append({
+                        "ea": callee,
+                        "name": memory.get("current_name") or memory.get("suggested_name") or callee,
+                        "summary": memory.get("summary"),
+                        "confidence": memory.get("confidence", 0),
+                    })
+            if known_callees:
+                item["known_callees"] = known_callees
+            batch.append(item)
+        return (
+            f"BINARY-WIDE COVERAGE: {covered:,}/{total:,} functions; {len(pending):,} pending.\n"
+            "CURRENT FUNCTION TRANSACTION (callee-first; complete this function before advancing):\n"
+            + json.dumps(batch, ensure_ascii=False)
+            + "\nFor this one function: collect function_evidence, decompile (or disassemble fallback), then call "
+              "record_function_analysis with a meaningful name decision, one-sentence summary, confidence, and evidence. "
+              "Do not inspect another function until record_function_analysis succeeds for this address."
+        )
+
     def on_start_autopilot(self):
-        """Start one evidence-driven autonomous investigation at the cursor target."""
+        """Start an evidence-driven A-to-Z investigation of the entire IDB."""
         self.stop_active_request()
         self.export_transcript = []
-        self.session = AgentSession(self.address, self.function_name)
-        self.policy = AgentPolicy(allow_mutations=self.allow_changes_cb.isChecked(), max_steps=80, max_seconds=1800)
+        self.protocol_audit = []
+        if not isinstance(getattr(self.session, "function_memory", None), dict):
+            self.session = AgentSession(self.address, self.function_name)
+        self.session.phase = "building_call_graph"
+        self.session.final_report = ""
+        self._task_profile = "autonomous_full"
+        self._task_targets = _collect_all_functions()
+        self._target_by_ea = {target["ea"]: target for target in self._task_targets}
+        self._visible_analyzing = set()
+        self._invalidate_stale_function_memory()
+        target_count = len(self._task_targets)
+        self.policy = AgentPolicy(
+            allow_mutations=self.allow_changes_cb.isChecked(),
+            max_steps=max(128, target_count * 10 + 64),
+            max_seconds=max(1800, target_count * 30),
+        )
         self.history = [self.system_prompt, {
             "role": "user",
             "content": (
-                "Begin the autonomous investigation. First obtain a compact binary_overview, then decompile the "
-                "root function and collect function_evidence. Use basic_blocks, stack_layout, xrefs, or disassembly "
-                "only to resolve specific uncertainties. Maintain coverage and follow evidence "
-                "into relevant callees. Current session state:\n" + self.session.snapshot()
+                "Begin a complete A-to-Z autonomous investigation. First obtain binary_overview, then analyze every "
+                "host-enumerated function with function_evidence plus decompile (or disassemble when decompilation "
+                "fails). Use deeper tools for suspicious or structurally important functions. Never return a final "
+                "report while the host reports pending coverage.\n\n" + self._coverage_batch_text()
+                + "\n\nCurrent session state:\n" + self.session.snapshot()
             ),
         }]
         self.error_count = 0
         self._focused_request = False
         self._focused_tool_rounds = 0
         self._tool_rounds = 0
-        self._max_tool_rounds = 12
+        self._max_tool_rounds = max(24, (target_count * 9 + 3) // 4 + 32)
         self._must_finalize = False
         self._finalize_reminders = 0
         self._report_revisions = 0
-        self._task_profile = ""
-        self._task_targets = []
         self.is_running = True
         self.is_paused = False
         self.btn_start.setEnabled(False)
@@ -1690,7 +2043,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     self.btn_pause.setEnabled(False)
                     self.btn_continue.setEnabled(True)
                     
-                    self.throttle_remaining = 240 # 4 minutes
+                    self.throttle_remaining = getattr(CONFIG, 'agent_cooldown', 240)
                     self.typing_indicator.setVisible(True)
                     
                     # Push the failed EA back to the front of the queue so it gets retried
@@ -1836,9 +2189,21 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 issues.append("targets lack function-level analysis: " + ", ".join(missing_evidence[:12]))
             if missing_report:
                 issues.append("the final report omits enumerated targets: " + ", ".join(missing_report[:12]))
+        if self._task_profile == "autonomous_full":
+            pending = self._pending_coverage_targets()
+            if pending:
+                issues.append(
+                    "targets lack function-level analysis: "
+                    + ", ".join(target["ea"] for target in pending[:12])
+                    + f" ({len(pending):,} functions remain pending)"
+                )
         return issues
 
     def _process_agent_response(self, response):
+        self.protocol_audit.append({
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "response": str(response),
+        })
         envelope, error = parse_agent_response(response)
         if error:
             self.error_count += 1
@@ -1855,7 +2220,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             unsupported = self.session.unsupported_report_markers(envelope["report"])
             contradictions = self._final_report_contradictions(envelope["report"])
             coverage_issues = [issue for issue in contradictions if issue.startswith("targets lack function-level analysis:")]
-            if coverage_issues and not self._must_finalize:
+            if coverage_issues and (self._task_profile == "autonomous_full" or not self._must_finalize):
                 self.history.append({
                     "role": "user",
                     "content": (
@@ -1889,7 +2254,21 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             self.session.phase = "complete"
             self.session.final_report = envelope["report"][:500000]
             self._checkpoint_session()
-            self.add_message("Final Analysis:\n\n" + self.session.final_report, is_user=False)
+            target_eas = {item["ea"] for item in self._task_targets}
+            memory = [item for ea, item in self.session.function_memory.items() if ea in target_eas]
+            analyzed = sum(1 for item in memory if item.get("state") in ("analyzed", "applied"))
+            renamed = sum(1 for item in memory if item.get("rename_applied"))
+            commented = sum(1 for item in memory if item.get("comment_applied"))
+            failed = sum(1 for item in memory if item.get("state") == "failed")
+            retained = sum(
+                1 for item in memory
+                if item.get("state") in ("analyzed", "applied") and not item.get("rename_applied")
+            )
+            completion = (
+                f"Coverage complete: {analyzed:,}/{len(self._task_targets):,} analyzed • {renamed:,} renamed • "
+                f"{commented:,} commented • {retained:,} names retained • {failed:,} unresolved."
+            )
+            self.add_message(completion + "\n\nFinal Analysis:\n\n" + self.session.final_report, is_user=False)
             self.is_running = False
             self.btn_start.setEnabled(True)
             self.btn_start.setVisible(True)
@@ -1939,19 +2318,45 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 self.add_message(f"Tool `{tool_name}` rejected: {validation_error}", is_user=False)
                 continue
             tool_name, args = normalized["tool"], normalized["args"]
+            if self._task_profile == "autonomous_full" and tool_name in (
+                "function_evidence", "decompile", "disassemble", "record_function_analysis",
+            ):
+                ready_targets = self._ready_coverage_targets()
+                ready_eas = {item["ea"] for item in ready_targets}
+                requested = f"0x{_agent_ea(args.get('ea', self.address), self.address):X}"
+                if ready_eas and requested not in ready_eas:
+                    args = dict(args)
+                    args["ea"] = ready_targets[0]["ea"]
             if tool_name in FUNCTION_SCOPED_AGENT_TOOLS:
                 requested_ea = _agent_ea(args.get("ea", self.address), self.address)
                 requested_func = idaapi.get_func(requested_ea)
                 if requested_func:
                     args["ea"] = f"0x{int(requested_func.start_ea):X}"
+            if self._task_profile == "autonomous_full" and tool_name in (
+                "function_evidence", "decompile", "disassemble",
+            ):
+                activity_ea = str(args.get("ea", ""))
+                if activity_ea and activity_ea not in self._visible_analyzing:
+                    self._visible_analyzing.add(activity_ea)
+                    target = self._target_by_ea.get(activity_ea, {})
+                    display_name = target.get("name") or idc.get_func_name(_agent_ea(activity_ea)) or activity_ea
+                    self.add_message(f"Analyzing {activity_ea}  {display_name}", is_user=False)
             repeated = self.session.record_call(tool_name, args)
+            if tool_name == "record_function_analysis":
+                # Low-confidence rescans legitimately replace the prior decision.
+                repeated = 0
             if repeated < 2:
                 all_calls_repeated = False
             replayed = False
             if repeated >= 2:
                 redirected = False
-                if self._task_profile in ("rename_descendants", "rename_prefix") and tool_name in FUNCTION_SCOPED_AGENT_TOOLS:
-                    for target in self._task_targets:
+                if self._task_profile in ("rename_descendants", "rename_prefix", "autonomous_full") and tool_name in FUNCTION_SCOPED_AGENT_TOOLS:
+                    redirect_targets = (
+                        self._ready_coverage_targets()
+                        if self._task_profile == "autonomous_full"
+                        else self._task_targets
+                    )
+                    for target in redirect_targets:
                         target_ea = target["ea"]
                         if not self.session.has_success(tool_name, target_ea):
                             args = dict(args)
@@ -2007,8 +2412,119 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     self.session.mark_examined(ea, disposition, args.get("summary", ""))
                     result = f"Marked 0x{ea:X} as {disposition}."
                     self.policy.record(tool_name, args, True, result)
+            elif tool_name == "record_function_analysis":
+                ea = _agent_ea(args.get("ea", self.address), self.address)
+                canonical = f"0x{ea:X}"
+                coverage = set(self.session.function_coverage.get(canonical, []))
+                summary = _short_function_summary(args.get("summary", ""))
+                evidence = args.get("evidence", [])
+                confidence = int(args.get("confidence", 0))
+                previous = dict(self.session.function_memory.get(canonical, {}))
+                attempts = int(previous.get("attempts", 0)) + 1
+                if "function_evidence" not in coverage or not ({"decompile", "disassemble"} & coverage):
+                    result = "Error: Collect function_evidence and decompile/disassemble before completing this function."
+                    self.policy.record(tool_name, args, False, result)
+                elif not summary:
+                    result = "Error: The short behavioral summary is empty."
+                    self.policy.record(tool_name, args, False, result)
+                elif not self.session.evidence_supported_for_ea(ea, evidence):
+                    result = "Error: Function analysis evidence is not supported by observations for this function."
+                    self.policy.record(tool_name, args, False, result)
+                else:
+                    original_name = previous.get("original_name") or idc.get_func_name(ea) or f"sub_{ea:X}"
+                    requested_name = str(args.get("suggested_name", "") or "").strip()
+                    validated_name = clean_name(requested_name, ea=ea) if requested_name else original_name
+                    if requested_name and not validated_name:
+                        result = "Error: Suggested name was rejected as generic, invalid, or address-derived."
+                        self.policy.record(tool_name, args, False, result)
+                    elif confidence <= 50 and attempts < 3:
+                        self.session.remember_function(ea, {
+                            "original_name": original_name, "suggested_name": validated_name or original_name,
+                            "summary": summary, "confidence": confidence, "evidence": evidence[:20],
+                            "state": "retry_low_confidence", "attempts": attempts,
+                            "code_fingerprint": _function_code_fingerprint(ea),
+                            "analysis_version": _FUNCTION_ANALYSIS_VERSION,
+                            "callees": list(getattr(self, "_target_by_ea", {}).get(canonical, {}).get("callees", [])),
+                            "name_validation": "accepted" if requested_name else "retained",
+                        })
+                        result = f"Low-confidence result ({confidence}%) stored; reanalyze this function individually."
+                        self.policy.record(tool_name, args, True, result)
+                    else:
+                        apply_result = {"ok": True, "renamed": False, "commented": False,
+                                        "final_name": original_name, "error": ""}
+                        if self.policy.allow_mutations:
+                            apply_result = _apply_function_name_and_comment(ea, validated_name, summary)
+                            self.policy.record("apply_function_metadata", {
+                                "ea": canonical, "new_name": validated_name, "summary": summary,
+                            }, bool(apply_result.get("ok")), apply_result.get("error", "applied"))
+                        state = "applied" if self.policy.allow_mutations and apply_result.get("ok") else (
+                            "apply_failed" if self.policy.allow_mutations else "analyzed"
+                        )
+                        final_name = apply_result.get("final_name") or original_name
+                        self.session.remember_function(ea, {
+                            "original_name": original_name, "current_name": final_name,
+                            "original_comment": apply_result.get(
+                                "original_comment", previous.get("original_comment", "")
+                            ),
+                            "suggested_name": validated_name or original_name, "summary": summary,
+                            "confidence": confidence, "evidence": evidence[:20], "state": state,
+                            "attempts": attempts, "code_fingerprint": _function_code_fingerprint(ea),
+                            "analysis_version": _FUNCTION_ANALYSIS_VERSION,
+                            "callees": list(getattr(self, "_target_by_ea", {}).get(canonical, {}).get("callees", [])),
+                            "name_validation": "accepted" if requested_name else "retained",
+                            "rename_applied": bool(apply_result.get("renamed")),
+                            "comment_applied": bool(apply_result.get("commented")),
+                            "last_error": apply_result.get("error", ""),
+                        })
+                        if apply_result.get("ok"):
+                            self.session.mark_examined(ea, "analyzed", summary)
+                            result = f"Completed {canonical}: {final_name} — {summary} Confidence: {confidence}%."
+                            self.policy.record(tool_name, args, True, result)
+                            if self._task_profile == "autonomous_full":
+                                if apply_result.get("renamed"):
+                                    action = f"Renamed {original_name} → {final_name}"
+                                elif apply_result.get("commented"):
+                                    action = f"Commented {final_name}"
+                                else:
+                                    action = f"Analyzed {final_name} — existing name retained"
+                                self.add_message(
+                                    f"{action}\nWhat it does: {summary}  Confidence: {confidence}%", is_user=False,
+                                )
+                                self._refresh_agent_dashboard()
+                        else:
+                            result = f"Error: Rename/comment transaction failed for {canonical}: {apply_result.get('error', 'unknown error')}"
+                            self.policy.record(tool_name, args, False, result)
             else:
                 result = execute_agent_tool(self.policy, tool_name, args, self.address, self.confirm_tool)
+            if (
+                self._task_profile == "autonomous_full"
+                and tool_name in ("function_evidence", "decompile", "disassemble")
+                and result_status(result) == "error"
+            ):
+                failed_ea = _agent_ea(args.get("ea", self.address), self.address)
+                failed_key = f"0x{failed_ea:X}"
+                prior = dict(self.session.function_memory.get(failed_key, {}))
+                failures = dict(prior.get("tool_failures", {}))
+                failures[tool_name] = int(failures.get(tool_name, 0)) + 1
+                terminal_failure = (
+                    failures.get("function_evidence", 0) >= 3
+                    or (failures.get("decompile", 0) >= 1 and failures.get("disassemble", 0) >= 1)
+                )
+                self.session.remember_function(failed_ea, {
+                    "original_name": prior.get("original_name") or idc.get_func_name(failed_ea) or f"sub_{failed_ea:X}",
+                    "current_name": idc.get_func_name(failed_ea) or f"sub_{failed_ea:X}",
+                    "state": "failed" if terminal_failure else "retry_tool_failure",
+                    "tool_failures": failures, "last_error": str(result)[:1000],
+                    "summary": prior.get("summary", "Analysis unavailable after IDA code-recovery failure."),
+                    "code_fingerprint": _function_code_fingerprint(failed_ea),
+                })
+                if terminal_failure:
+                    self.add_message(
+                        f"{failed_key} needs attention — both decompilation/disassembly or repeated evidence collection failed.",
+                        is_user=False,
+                    )
+                    self._refresh_agent_dashboard()
+                    self._refresh_agent_dashboard()
             if replayed:
                 made_progress = False
             else:
@@ -2029,7 +2545,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             observations.append(self.policy.untrusted_result(tool_name, result))
             if not made_progress:
                 observations.append("HOST DECISION GUIDANCE\n" + recovery_guidance(tool_name, result))
-            self.add_message(f"Tool `{tool_name}`: {result[:240]}{'...' if len(result) > 240 else ''}", is_user=False)
+            if self._task_profile != "autonomous_full" or result_status(result) == "error":
+                self.add_message(f"Tool `{tool_name}`: {result[:240]}{'...' if len(result) > 240 else ''}", is_user=False)
 
         if self._focused_request:
             self._focused_tool_rounds += 1
@@ -2038,11 +2555,17 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         # One wholly duplicated batch is enough evidence that the model is
         # stalled. Preserve cached observations and force synthesis instead of
         # allowing another identical batch.
-        if all_calls_repeated:
+        if all_calls_repeated and self._task_profile != "autonomous_full":
             self._must_finalize = True
         if self._tool_rounds >= self._max_tool_rounds or self.policy.steps >= self.policy.max_steps:
+            if self._task_profile == "autonomous_full" and self._pending_coverage_targets():
+                self._finish_stopped(
+                    "Binary-wide investigation stopped at its safety limit with "
+                    f"{len(self._pending_coverage_targets()):,} functions still pending. No premature summary was accepted."
+                )
+                return
             self._must_finalize = True
-        if self.session.should_finalize():
+        if self.session.should_finalize() and self._task_profile != "autonomous_full":
             self._must_finalize = True
 
         self._checkpoint_session()
@@ -2052,6 +2575,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             "content": (
                 "\n\n".join(observations)
                 + "\n\nCURRENT INVESTIGATION STATE\n" + self.session.snapshot()
+                + ("\n\n" + self._coverage_batch_text() if self._task_profile == "autonomous_full" else "")
                 + ("\n\nTOOL LIMIT REACHED: Return action=final now with the direct answer; do not call more tools."
                    if self._must_finalize else "")
             ),
@@ -2073,7 +2597,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 
         AI_CLIENT = _ai_mod.AI_CLIENT
         if not AI_CLIENT:
-            self.add_message("Error: AI Client not initialized.", is_user=False)
+            self._finish_stopped("Agent could not start because the AI client is not initialized.")
             return
 
         self.typing_indicator.setVisible(True)
@@ -2089,12 +2613,9 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         def handle_chunk(text):
             if request_generation != self._request_generation or not self.is_running:
                 return
-            if hasattr(self, 'live_bubble') and self.live_bubble:
-                self._streamed_text += text
-                # Use raw text during streaming to prevent markdown parser from freezing the UI
-                safe_text = html.escape(self._streamed_text).replace('\n', '<br>')
-                self.live_bubble.label.setText(safe_text)
-                self.scroll_to_bottom()
+            # Strict agent responses are internal JSON envelopes. Do not flash
+            # partial protocol data in the user-facing activity feed.
+            return
         
         def handle_response(response, **kwargs):
             if request_generation != self._request_generation or not self.is_running:
@@ -2111,7 +2632,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     self.btn_pause.setEnabled(False)
                     self.btn_continue.setEnabled(True)
                     
-                    self.throttle_remaining = 240 # 4 minutes
+                    self.throttle_remaining = getattr(CONFIG, 'agent_cooldown', 240)
                     self.typing_indicator.setVisible(True)
                     
                     def update_countdown():

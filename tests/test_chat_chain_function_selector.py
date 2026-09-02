@@ -14,6 +14,12 @@ class ChatChainFunctionSelectorTests(unittest.TestCase):
         self.assertIn("completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)", SOURCE)
         self.assertIn("completer.setFilterMode(match_contains)", SOURCE)
 
+    def test_entry_has_an_explicit_visible_popup_button(self):
+        self.assertIn("self.entry_dropdown_btn = QtWidgets.QToolButton()", SOURCE)
+        self.assertIn('self.entry_dropdown_btn.setToolTip("Show all entry functions")', SOURCE)
+        self.assertIn("self.entry_dropdown_btn.clicked.connect(self.entry_combo.showPopup)", SOURCE)
+        self.assertIn("entry_row.addWidget(self.entry_dropdown_btn)", SOURCE)
+
     def test_qt_compat_flattens_combo_and_completer_enums(self):
         compat = (ROOT / "pseudonote_extended" / "qt_compat.py").read_text(encoding="utf-8-sig")
         self.assertIn('(QtWidgets.QComboBox, ("InsertPolicy", "SizeAdjustPolicy"))', compat)

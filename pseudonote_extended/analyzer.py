@@ -676,7 +676,7 @@ class StreamingSummaryDialog(QDialog):
 class BulkAnalyzer(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
+        self.setWindowFlags(self.windowFlags() | Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
         self.pn_config = CONFIG
         self.workers = []
         self._cancel_requested = False
@@ -687,21 +687,13 @@ class BulkAnalyzer(QDialog):
         self.setup_ui()
         self.worker = None
         QTimer.singleShot(100, self.load_table_state)
-        QTimer.singleShot(200, self.check_workflow_tip)
 
     def check_workflow_tip(self):
-        msg = (
-            "<b>Pro Tip:</b> For the best results, use the tools in this sequence:<br><br>"
-            "1. <b>Function Renamer</b> → 2. <b>Variable Renamer</b> → 3. <b>Function Analyzer</b><br><br>"
-            "Following this order ensures the AI has the most accurate function names "
-            "and variable context available at each step."
+        """Show a non-blocking workflow tip in the log instead of a blocking QMessageBox."""
+        self.add_log(
+            "Tip: For best results use tools in order: Function Renamer → Variable Renamer → Function Analyzer",
+            'info'
         )
-
-        box = QMessageBox(self)
-        box.setWindowTitle("PseudoNote Workflow Tip")
-        box.setText(msg)
-        box.setIcon(QMessageBox.Information)
-        box.exec_()
 
     def setup_ui(self):
         apply_mac_workspace(self)
@@ -1810,8 +1802,6 @@ Do not pad with generic statements."""
         
         if found:
             found.load_eas(eas)
-            found.raise_()
-            found.activateWindow()
         else:
             # Create a new one
             dlg = BulkRenamer(self.pn_config, self.parent())

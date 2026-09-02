@@ -979,7 +979,7 @@ class VarRenameWorker(QThread):
 class BulkVariableRenamer(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
+        self.setWindowFlags(self.windowFlags() | Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
         self.pn_config = CONFIG
         self.workers = []
         self._cancel_requested = False
@@ -1002,23 +1002,14 @@ class BulkVariableRenamer(QDialog):
 
         self.setup_ui()
         QTimer.singleShot(100, self.load_table_state)
-        QTimer.singleShot(200, self.check_workflow_tip)
         self.update_button_states()
 
     def check_workflow_tip(self):
-        msg = (
-            "<b>Pro Tip:</b> Always rename <b>sub_*</b> functions first to get better "
-            "and more accurate context for variable renaming.<br><br>"
-            "The AI performs significantly better when it knows the names of the "
-            "functions being called in the code."
+        """Show a non-blocking workflow tip in the log instead of a blocking QMessageBox."""
+        self.add_log(
+            "Tip: Run Function Renamer first — the AI performs significantly better when function names are known.",
+            'info'
         )
-
-        box = QMessageBox(self)
-        box.setWindowTitle("PseudoNote Workflow Tip")
-        box.setText(msg)
-        box.setIcon(QMessageBox.Information)
-
-        box.exec_()
 
     # -----------------------------------------------------------------------
     # build_cfg — mirrors BulkRenamer.build_cfg

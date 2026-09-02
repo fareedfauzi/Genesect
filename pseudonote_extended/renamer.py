@@ -1377,7 +1377,7 @@ class AnalyzeWorker(QThread):
 class BulkRenamer(QDialog):
     def __init__(self, pn_config, parent=None):
         super().__init__(parent)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
+        self.setWindowFlags(self.windowFlags() | Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
         self.pn_config = CONFIG
         self.workers = []
         self._cancel_requested = False
@@ -1393,7 +1393,6 @@ class BulkRenamer(QDialog):
         self.existing_names = set()
         self.setup_ui()
         QTimer.singleShot(100, self.load_table_state)
-        QTimer.singleShot(200, self.check_workflow_tip)
         self.loader = None
         self.worker = None
         self._start_time = None
@@ -1565,6 +1564,11 @@ class BulkRenamer(QDialog):
         self.tree_btn.clicked.connect(self.load_current_tree)
         smart_row.addWidget(self.tree_btn)
 
+        vtable_btn = QPushButton("VTable Classes")
+        vtable_btn.setToolTip("Load methods from identified virtual function tables.")
+        vtable_btn.clicked.connect(self.load_vtables)
+        smart_row.addWidget(vtable_btn)
+
         smart_row.addStretch()
         tb_container.addWidget(smart_row_widget)
 
@@ -1706,7 +1710,7 @@ class BulkRenamer(QDialog):
         self.unload_btn = QPushButton('Unload Table')
         self.unload_btn.setObjectName("danger")
         self.unload_btn.setToolTip("Clear the current list of functions")
-        self.unload_btn.clicked.connect(lambda: [self.model.clear(), setattr(self, 'load_mode', 'prefix'), self.update_count()])
+        self.unload_btn.clicked.connect(self.unload_table)
         log_header.addWidget(self.unload_btn)
 
         cb = QPushButton('Clear Log')
@@ -1921,20 +1925,37 @@ class BulkRenamer(QDialog):
         idaapi.execute_sync(_collect, idaapi.MFF_READ)
         self._finish_smart_load(funcs, "import wrapper")
 
+    def load_vtables(self):
+        """Load functions referenced by virtual function tables."""
+        import pseudonote_extended.vftable as vftable
+        self.add_log("Scanning for vtables... This may take a moment.", 'info')
+        QApplication.processEvents()
+        
+        funcs = []
+        seen = set()
+        
+        def _collect():
+            rows = vftable.scan_vftables()
+            for row in rows:
+                ea = row["method_ea"]
+                if ea in seen or not is_valid_seg(ea):
+                    continue
+                name = row["method_name"]
+                funcs.append(FuncData(ea, name))
+                seen.add(ea)
+                
+        try:
+            idaapi.execute_sync(_collect, idaapi.MFF_READ)
+            self._finish_smart_load(funcs, "vtable")
+        except Exception as e:
+            self.add_log(f"Error scanning vtables: {e}", 'err')
+
     def check_workflow_tip(self):
-        msg = (
-            "<b>Pro Tip:</b> For the best results, use the tools in this sequence:<br><br>"
-            "1. <b>Function Renamer</b> → 2. <b>Variable Renamer</b> → 3. <b>Function Analyzer</b><br><br>"
-            "Following this order ensures the AI has the most accurate function names "
-            "and variable context available at each step."
+        """Show a non-blocking workflow tip in the log instead of a blocking QMessageBox."""
+        self.add_log(
+            "Tip: For best results use tools in order: Function Renamer → Variable Renamer → Function Analyzer",
+            'info'
         )
-
-        box = QMessageBox(self)
-        box.setWindowTitle("PseudoNote Workflow Tip")
-        box.setText(msg)
-        box.setIcon(QMessageBox.Information)
-
-        box.exec_()
 
     def update_status(self, text):
         if not text:
@@ -2919,8 +2940,6 @@ class BulkRenamer(QDialog):
                 
         if found:
             found.load_eas(eas, append=True)
-            found.raise_()
-            found.activateWindow()
         else:
             dlg = BulkAnalyzer(self.parent())
             dlg.show()
@@ -2944,8 +2963,6 @@ class BulkRenamer(QDialog):
                 
         if found:
             found.load_eas(eas, append=True)
-            found.raise_()
-            found.activateWindow()
         else:
             dlg = BulkVariableRenamer(self.parent())
             dlg.show()
@@ -2985,8 +3002,8 @@ class BulkRenamer(QDialog):
         self.model.clear()
         self.temp_funcs = []
         self.seen_eas = set()
+        self.load_mode = 'prefix'
         self.update_count()
         self.update_stats_label()
         self.add_log("Table unloaded.", 'info')
         self.save_table_state()
-

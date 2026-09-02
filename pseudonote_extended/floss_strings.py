@@ -748,12 +748,30 @@ def show_floss_strings_ui():
         elif "sc64" in item:
             floss_format = "sc64"
 
-    # Use the documented long option and conventional argument order. Some
-    # older standalone builds mishandle '-j -- <input>' and render text.
-    cmd = [floss_path, "--json"]
+    # Determine if this FLOSS executable supports the JSON output flag.
+    # Older v1.x standalone builds do not support -j or --json and output text by default.
+    supports_json = False
+    json_flag = "-j"
+    try:
+        completed = subprocess.run(
+            [floss_path, "-h"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if is_windows else 0
+        )
+        help_text = (completed.stdout + completed.stderr).decode('utf-8', 'replace').lower()
+        if "--json" in help_text:
+            supports_json = True
+            json_flag = "--json"
+        elif "-j" in help_text:
+            supports_json = True
+    except Exception:
+        pass
+
+    cmd = [floss_path]
+    if supports_json:
+        cmd.append(json_flag)
     if floss_format:
         cmd.extend(["--format", floss_format])
-    cmd.append(input_file)
+    cmd.extend(["--", input_file])
     
     floss_thread = FlossWorker(cmd)
     floss_thread.finished_signal.connect(on_floss_finished)

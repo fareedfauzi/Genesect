@@ -20,9 +20,11 @@ TOOL_CATEGORIES = {
     "get_xrefs": READ, "analyze_subfunction": READ,
     "query_threat_intel": READ, "get_vtable_ptrs": READ, "read_memory": READ,
     "search_findings": READ, "record_finding": READ, "mark_examined": READ,
+    "record_function_analysis": READ,
     "jump_to_address": NAVIGATE,
     "save_finding": WRITE_IDB, "rename_func": WRITE_IDB, "rename_vars": WRITE_IDB,
     "add_comment": WRITE_IDB, "create_apply_struct": WRITE_IDB, "set_func_type": WRITE_IDB,
+    "apply_function_metadata": WRITE_IDB,
     "patch_bytes": PATCH, "execute_idapython": EXECUTE,
 }
 

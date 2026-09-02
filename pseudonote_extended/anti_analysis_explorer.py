@@ -16,6 +16,7 @@ from pseudonote_extended.qt_compat import QtCore, QtWidgets
 from pseudonote_extended.ui.components import PageHeader, Card
 from pseudonote_extended.ui.components import ToggleSwitch
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
+from pseudonote_extended.api_knowledge import normalize_api_name, taxonomy_entry
 
 
 _explorer = None
@@ -54,11 +55,12 @@ def _row(category, ea, indicator="", confidence="high", evidence="", detail="", 
 
 def _api_calls(pattern):
     for api_ea, api_name in idautils.Names():
-        if not pattern.search(api_name or ""):
+        normalized = normalize_api_name(api_name)
+        if not pattern.search(normalized):
             continue
         for xref in idautils.XrefsTo(api_ea, 0):
             if xref.type in (getattr(idaapi, "fl_CF", 16), getattr(idaapi, "fl_CN", 17)) and _func_start(xref.frm) != idaapi.BADADDR:
-                yield int(xref.frm), api_name
+                yield int(xref.frm), normalized
 
 
 def _has_nearby_immediate(site, expected, radius=12):
@@ -84,7 +86,8 @@ def scan_direct_checks():
     rows = []
     explicit_debug = {"isdebuggerpresent", "checkremotedebuggerpresent", "debugactiveprocess"}
     for site, api_name in _api_calls(_DEBUG_API):
-        normalized = re.sub(r"^__imp_", "", api_name, flags=re.I).lower()
+        normalized = normalize_api_name(api_name).lower()
+        taxonomy = taxonomy_entry(api_name)
         if normalized in explicit_debug:
             score = 90
         elif normalized in ("ntsetinformationthread",) and _has_nearby_immediate(site, {0x11}):
@@ -93,10 +96,11 @@ def scan_direct_checks():
             score = 75  # debug port/object/flags information classes
         else:
             score = 40
+        taxonomy_note = " Taxonomy: %s/%s." % (taxonomy["category"], taxonomy["severity"]) if taxonomy else ""
         rows.append(_row(
             "Debugger check", site, api_name,
             "high" if score >= 80 else ("medium" if score >= 60 else "low"),
-            "explicit debugger check or anti-debug information class" if score >= 75 else "dual-use debugger/process API without a confirmed anti-debug argument",
+            ("explicit debugger check or anti-debug information class" if score >= 75 else "dual-use debugger/process API without a confirmed anti-debug argument") + taxonomy_note,
             idc.generate_disasm_line(site, 0) or "", score,
         ))
 
@@ -219,8 +223,10 @@ def scan_correlated_timing_checks():
                 ", ".join(_hex(ea) for ea in arithmetic[:12]), ", ".join(_hex(ea) for ea in comparison[:12]))
             rows.append(_row("Timing check", calls[0][0], "%d timestamp reads" % len(calls), "medium", "multiple timestamps plus delta arithmetic and comparison in one function", detail, 70))
         else:
-            for site, api_name in calls:
-                rows.append(_row("Timing source", site, api_name, "low", "timestamp source without a complete local timing-check chain", idc.generate_disasm_line(site, 0) or "", 20))
+            # A timestamp source by itself is normal application behavior and
+            # is intentionally omitted. Only the correlated delta/check chain
+            # above is useful anti-analysis evidence.
+            continue
     return rows
 
 
@@ -373,12 +379,19 @@ class AntiAnalysisExplorer(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            for column, value in enumerate([row["category"], _hex(row["ea"]), row["function"], row["indicator"], row["confidence"], row["evidence"]]):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, row in enumerate(self.rows):
+                for column, value in enumerate([row["category"], _hex(row["ea"]), row["function"], row["indicator"], row["confidence"], row["evidence"]]):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(5, max(420, self.table.columnWidth(5)))
         self.table.setSortingEnabled(True)
@@ -395,6 +408,8 @@ class AntiAnalysisExplorer(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None and 0 <= int(index) < len(self.rows) else None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for row_index in range(self.table.rowCount()):
             row = self.rows[int(self.table.item(row_index, 0).data(QtCore.Qt.UserRole))]

@@ -74,9 +74,9 @@ class Config:
         # UI Appearance
         self.highlight_color = "#ffaaff"
         self.indent_guides_enabled = True
-        self.indent_guides_style = "Subtle"
-        self.indent_guides_width = 0
-        self.indent_guides_empty_lines = False
+        self.indent_guides_color = "#57CFDC"
+        self.pseudocode_folding_color = "#3F3F3F"
+        self.argument_name_hints_enabled = False
         self.zoom_all_views_enabled = True
         self.bookmarked_actions = [
             "pseudonote_extended:ask_chat",
@@ -111,6 +111,9 @@ class Config:
         self.deep_parallel_workers = 1
         self.deep_cooldown = 0
         self.deep_max_lines = 200
+        
+        # Autonomous Agent (Specific)
+        self.agent_cooldown = 240
         
         # New: Graph and analysis limits (Bug #4)
         self.max_graph_nodes = 500
@@ -270,9 +273,9 @@ class Config:
                 # Migrate the former built-in default without affecting custom colors.
                 self.highlight_color = "#ffaaff"
             self.indent_guides_enabled = parser.getboolean("Fonts", "INDENT_GUIDES_ENABLED", fallback=True)
-            self.indent_guides_style = parser.get("Fonts", "INDENT_GUIDES_STYLE", fallback="Subtle")
-            self.indent_guides_width = parser.getint("Fonts", "INDENT_GUIDES_WIDTH", fallback=0)
-            self.indent_guides_empty_lines = parser.getboolean("Fonts", "INDENT_GUIDES_EMPTY_LINES", fallback=False)
+            self.indent_guides_color = parser.get("Fonts", "INDENT_GUIDES_COLOR", fallback="#57CFDC")
+            self.pseudocode_folding_color = parser.get("Fonts", "PSEUDOCODE_FOLDING_COLOR", fallback="#3F3F3F")
+            self.argument_name_hints_enabled = parser.getboolean("Fonts", "ARGUMENT_NAME_HINTS_ENABLED", fallback=False)
             self.zoom_all_views_enabled = parser.getboolean("Fonts", "ZOOM_ALL_VIEWS_ENABLED", fallback=True)
 
         if parser.has_section("UI"):
@@ -330,6 +333,9 @@ class Config:
             self.deep_parallel_workers = parser.getint("Analysis", "DEEP_WORKERS", fallback=1)
             self.deep_cooldown = parser.getint("Analysis", "DEEP_COOLDOWN", fallback=0)
             self.deep_max_lines = parser.getint("Analysis", "DEEP_MAX_LINES", fallback=200)
+
+            # Autonomous Agent
+            self.agent_cooldown = parser.getint("Analysis", "AGENT_COOLDOWN", fallback=240)
 
             # Limits
             self.max_graph_nodes = parser.getint("Analysis", "MAX_GRAPH_NODES", fallback=500)
@@ -419,9 +425,9 @@ class Config:
         parser.set("Fonts", "MD_SIZE", str(self.markdown_font_size))
         parser.set("Fonts", "HIGHLIGHT_COLOR", self.highlight_color)
         parser.set("Fonts", "INDENT_GUIDES_ENABLED", str(self.indent_guides_enabled))
-        parser.set("Fonts", "INDENT_GUIDES_STYLE", self.indent_guides_style)
-        parser.set("Fonts", "INDENT_GUIDES_WIDTH", str(self.indent_guides_width))
-        parser.set("Fonts", "INDENT_GUIDES_EMPTY_LINES", str(self.indent_guides_empty_lines))
+        parser.set("Fonts", "INDENT_GUIDES_COLOR", self.indent_guides_color)
+        parser.set("Fonts", "PSEUDOCODE_FOLDING_COLOR", self.pseudocode_folding_color)
+        parser.set("Fonts", "ARGUMENT_NAME_HINTS_ENABLED", str(self.argument_name_hints_enabled))
         parser.set("Fonts", "ZOOM_ALL_VIEWS_ENABLED", str(self.zoom_all_views_enabled))
 
         if not parser.has_section("UI"): parser.add_section("UI")
@@ -475,6 +481,9 @@ class Config:
         parser.set("Analysis", "DEEP_WORKERS", str(self.deep_parallel_workers))
         parser.set("Analysis", "DEEP_COOLDOWN", str(self.deep_cooldown))
         parser.set("Analysis", "DEEP_MAX_LINES", str(self.deep_max_lines))
+
+        # Autonomous Agent
+        parser.set("Analysis", "AGENT_COOLDOWN", str(self.agent_cooldown))
 
         parser.set("Analysis", "MAX_GRAPH_NODES", str(self.max_graph_nodes))
         parser.set("Analysis", "MAX_GRAPH_DEPTH", str(self.max_graph_depth))

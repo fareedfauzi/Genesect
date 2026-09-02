@@ -5,7 +5,7 @@ import ida_funcs
 import idautils
 import idc
 
-from pseudonote_extended.qt_compat import QtCore, QtWidgets, Signal
+from pseudonote_extended.qt_compat import QtCore, QtGui, QtWidgets, Signal
 
 
 class SearchableFunctionSelector(QtWidgets.QComboBox):
@@ -30,6 +30,27 @@ class SearchableFunctionSelector(QtWidgets.QComboBox):
             completer.setCompletionMode(QtWidgets.QCompleter.PopupCompletion)
         self.activated.connect(self._on_index_activated)
         self.lineEdit().returnPressed.connect(self._on_text_submitted)
+
+    def create_dropdown_button(self, parent=None):
+        """Create an explicit, theme-aware button that opens this selector."""
+        button = QtWidgets.QToolButton(parent)
+        button.setText("\u25be")
+        button.setFixedSize(30, 30)
+        button.setToolTip("Show all entry functions")
+        button.setAccessibleName("Show entry function list")
+        palette = button.palette()
+        accent = palette.color(QtGui.QPalette.Highlight).name()
+        accent_text = palette.color(QtGui.QPalette.HighlightedText).name()
+        button.setStyleSheet(
+            "QToolButton {"
+            f"background: {accent}; color: {accent_text}; border: 1px solid {accent};"
+            "border-radius: 6px; font-size: 14px; font-weight: bold; padding: 0;"
+            "}"
+            "QToolButton:hover { border: 2px solid palette(highlighted-text); }"
+            "QToolButton:pressed { padding-top: 1px; }"
+        )
+        button.clicked.connect(self.showPopup)
+        return button
 
     def refresh_functions(self):
         current_ea = self.current_function_ea()

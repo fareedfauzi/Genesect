@@ -4,10 +4,7 @@ AI Chat interface for PseudoNote.
 Provides a dockable widget to chat with AI about the current function.
 """
 
-import re
 import html
-import functools
-import os
 
 import idaapi
 import ida_kernwin
@@ -16,78 +13,61 @@ import idc
 import idautils
 
 import json
-from pseudonote_extended.qt_compat import QtWidgets, QtCore, QtGui, Signal, qt_cast_flags
-from pseudonote_extended.config import CONFIG, LOGGER
+from pseudonote_extended.qt_compat import QtWidgets, QtCore, QtGui, Signal
+from pseudonote_extended.config import LOGGER
 import pseudonote_extended.ai_client as _ai_mod
 from pseudonote_extended.idb_storage import save_to_idb, load_from_idb
 from pseudonote_extended.ui.workspace import RequestGate
 from pseudonote_extended.chat_state import normalize_chat_history
 from pseudonote_extended.ui.typography import ui_font
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
-from pseudonote_extended.chat_tool_runtime import (
-    build_chat_tool_prompt, direct_read_tool, execute_chat_tool, new_chat_policy, parse_agent_response,
-)
 from pseudonote_extended.chat_export import export_chat_log
 
 CHAT_HISTORY_TAG = 96
 
-CHAT_TOOL_GROUPS = (
-    ("Inspect Live IDB", (
-        ("Show pseudocode", "prompt", "Show the actual Hex-Rays pseudocode for this function. Use the decompile tool and preserve important addresses."),
-        ("Show assembly", "prompt", "Show the actual IDA disassembly for this function. Use the disassemble tool; do not infer assembly from pseudocode."),
-        ("Show callers / callees", "prompt", "Use the cross-reference tools to show this function's callers and callees with addresses."),
-        ("Show variables / stack", "prompt", "Use the stack-layout tool to show arguments, local variables, locations, and types for this function."),
-        ("Show basic blocks", "prompt", "Use the basic-block tool to show this function's control-flow blocks and edges."),
-    )),
-    ("Understand", (
-        ("Explain function", "prompt", "Explain this function step by step, prioritizing the decompiled logic and citing important operations."),
-        ("Summarize behavior", "prompt", "Summarize this function's purpose, inputs, outputs, side effects, and important callees."),
-        ("Find IOCs / C2", "prompt", "Find any evidence of C2 infrastructure or other IOCs in this function. Cite exact strings and explain confidence."),
+CHAT_SIDEBAR_GROUPS = (
+    ("Prompt Templates", (
+        ("Explain function", "prompt", "Explain this function step by step using the supplied pseudocode."),
+        ("Summarize behavior", "prompt", "Summarize this function's purpose, inputs, outputs, side effects, and important calls."),
+        ("Find IOCs / C2", "prompt", "Look for evidence of IOCs or C2 behavior in this function. Cite exact evidence and state confidence."),
         ("Identify vulnerabilities", "prompt", "Review this function for memory-safety, validation, and logic vulnerabilities. Cite the relevant pseudocode."),
+        ("Explain data flow", "prompt", "Explain how important inputs and values flow through this function to its outputs and side effects."),
     )),
     ("Rename & Types", (
-        ("Suggest function name", "action", "pseudonote_extended:rename_function"),
-        ("Malware-aware function name", "action", "pseudonote_extended:rename_function_malware"),
-        ("Suggest variable names", "action", "pseudonote_extended:rename_variables"),
-        ("Suggest function prototype", "action", "pseudonote_extended:suggest_function_prototype"),
-        ("Infer / edit structure", "action", "pseudonote_extended:analyze_struct"),
+        ("Suggest function name", "shortcut", "pseudonote_extended:rename_function"),
+        ("Malware-aware function name", "shortcut", "pseudonote_extended:rename_function_malware"),
+        ("Suggest variable names", "shortcut", "pseudonote_extended:rename_variables"),
+        ("Suggest function prototype", "shortcut", "pseudonote_extended:suggest_function_prototype"),
+        ("Infer / edit structure", "shortcut", "pseudonote_extended:analyze_struct"),
     )),
-    ("Document", (
-        ("Generate pseudocode comments", "action", "pseudonote_extended:add_comments"),
-        ("Open readable code", "action", "pseudonote_extended:readable_code"),
-        ("Open analyst notes", "action", "pseudonote_extended:analyst_notes"),
+    ("Documentation", (
+        ("Generate pseudocode comments", "shortcut", "pseudonote_extended:add_comments"),
+        ("Open readable code", "shortcut", "pseudonote_extended:readable_code"),
+        ("Open analyst notes", "shortcut", "pseudonote_extended:analyst_notes"),
     )),
     ("Inspect", (
-        ("Open call tree", "action", "pseudonote_extended:dnspy_xrefs"),
+        ("Open call tree", "shortcut", "pseudonote_extended:dnspy_xrefs"),
     )),
 )
 
-AI_WORKFLOW_ACTIONS = frozenset((
-    "pseudonote_extended:rename_function",
-    "pseudonote_extended:rename_function_malware",
-    "pseudonote_extended:rename_variables",
-    "pseudonote_extended:suggest_function_prototype",
-    "pseudonote_extended:analyze_struct",
-    "pseudonote_extended:add_comments",
-))
-
-CONFIRM_CHAT_ACTIONS = {
-    "pseudonote_extended:rename_function": "generate and review a suggested function rename",
-    "pseudonote_extended:rename_function_malware": "generate and review a malware-aware function rename",
-    "pseudonote_extended:rename_variables": "generate and review variable renames",
-    "pseudonote_extended:add_comments": "generate and review pseudocode comments",
+CONFIRM_SIDEBAR_SHORTCUTS = {
+    "pseudonote_extended:rename_function": "open the function-renaming workflow",
+    "pseudonote_extended:rename_function_malware": "open the malware-aware renaming workflow",
+    "pseudonote_extended:rename_variables": "open the variable-renaming workflow",
+    "pseudonote_extended:add_comments": "open pseudocode-comment generation",
 }
 
-
-def chat_tool_execution_type(kind, payload):
-    """Return the user-facing execution type for a Chat sidebar entry."""
-    kind = str(kind or "")
-    payload = str(payload or "")
-    if kind == "prompt":
-        # Explicit display requests are answered directly from the live IDB;
-        # the remaining prompts require model analysis.
-        return "Tool" if direct_read_tool(payload) else "AI"
-    return "AI" if payload in AI_WORKFLOW_ACTIONS else "Tool"
+def build_chat_prompt(function_name, decompiled_code, caller_context=""):
+    """Create the plain-chat system context used by the original PseudoNote UI."""
+    return {
+        "role": "system",
+        "content": (
+            f"You are a helpful reverse-engineering assistant analyzing `{function_name}`. "
+            f"Answer the user's questions conversationally from the supplied source. "
+            f"Do not request tools, emit tool-call JSON, or make autonomous decisions.\n\n"
+            f"Source:\n\n```c\n{decompiled_code}\n```{caller_context}"
+        ),
+    }
 
 def get_ida_colors():
     """Get theme-aware colors from IDA's palette."""
@@ -370,16 +350,9 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self._active_request_id = None
         self._closed = False
         self._continuation_count = 0
-        self._chat_tool_rounds = 0
-        self._chat_protocol_repairs = 0
-        self._max_chat_tool_rounds = 4
-        self._chat_finalize_requested = False
-        self._chat_tool_signatures = set()
-        self._successful_tool_results = []
-        self.tool_policy = new_chat_policy()
         
         # System prompt always reflects the current state of decompilation
-        self.system_prompt = build_chat_tool_prompt(address, function_name, decompiled_code)
+        self.system_prompt = build_chat_prompt(function_name, decompiled_code)
         
         # Load messages from IDB
         self.history = []
@@ -425,14 +398,6 @@ class IDAChatForm(ida_kernwin.PluginForm):
         regen_btn.clicked.connect(self.regenerate_last)
         h_layout.addWidget(regen_btn)
 
-        self.allow_changes_cb = QtWidgets.QCheckBox("Enable IDA changes")
-        self.allow_changes_cb.setChecked(True)
-        self.allow_changes_cb.setToolTip(
-            "Allow reviewed rename, comment, prototype, and structure actions. "
-            "Each operation still shows a confirmation dialog."
-        )
-        h_layout.addWidget(self.allow_changes_cb)
-        
         clear_btn = QtWidgets.QPushButton("Clear Conversation")
         clear_btn.setFlat(True)
         clear_btn.setStyleSheet(f"QPushButton {{ color: {colors['mid']}; font-weight: 600; font-size: 9pt; }} QPushButton:hover {{ color: {colors['highlight']}; }}")
@@ -464,10 +429,10 @@ class IDAChatForm(ida_kernwin.PluginForm):
         workspace = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         workspace.setChildrenCollapsible(False)
         workspace.addWidget(self.scroll)
-        workspace.addWidget(self._build_tools_panel(colors))
+        workspace.addWidget(self._build_sidebar(colors))
         workspace.setStretchFactor(0, 1)
         workspace.setStretchFactor(1, 0)
-        workspace.setSizes([900, 260])
+        workspace.setSizes([900, 270])
         layout.addWidget(workspace, stretch=1)
 
         # "Asking AI" Indicator with Progress Bar
@@ -522,7 +487,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
         if len(self.history) <= 1:
             welcome_msg = (
                 f"I've analyzed this function `{self.function_name}`. How can I help you understand its logic?\n\n"
-                "Use the Tools sidebar for common analysis prompts and reviewed IDA actions."
+                "Use the sidebar for optional prompt templates and manual PseudoNote shortcuts."
             )
             self.add_message(welcome_msg, is_user=False)
             self.history.append({"role": "assistant", "content": welcome_msg})
@@ -537,85 +502,88 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self.context_timer.timeout.connect(self.check_context_change)
         self.context_timer.start(500)
 
-    def _build_tools_panel(self, colors):
+    def _build_sidebar(self, colors):
+        """Build manual prompt templates and workflow shortcuts."""
         panel = QtWidgets.QFrame()
-        panel.setObjectName("chatToolsPanel")
-        panel.setMinimumWidth(220)
-        panel.setMaximumWidth(310)
+        panel.setObjectName("chatSidebar")
+        panel.setMinimumWidth(225)
+        panel.setMaximumWidth(320)
         panel.setStyleSheet(f"""
-            QFrame#chatToolsPanel {{ background:{colors['alt_base']}; border-left:1px solid {colors['mid']}; }}
-            QLabel#chatToolsTitle {{ font-size:14px; font-weight:700; color:{colors['window_text']}; }}
-            QLabel#chatToolsHint {{ font-size:10px; color:{colors['text']}; }}
-            QTreeWidget {{ background:transparent; border:0; outline:0; padding:4px; }}
-            QTreeWidget::item {{ min-height:27px; padding:2px 6px; border-radius:6px; }}
-            QTreeWidget::item:hover {{ background:{colors['button']}; }}
-            QTreeWidget::item:selected {{ background:{colors['highlight']}; color:{colors['highlight_text']}; }}
+            QFrame#chatSidebar {{
+                background: {colors['alt_base']};
+                border-left: 1px solid {colors['mid']};
+            }}
+            QLabel#chatSidebarTitle {{
+                color: {colors['window_text']};
+                font-size: 14px;
+                font-weight: 700;
+            }}
+            QLabel#chatSidebarHint {{ color: {colors['text']}; font-size: 10px; }}
+            QTreeWidget {{ background: transparent; border: 0; outline: 0; padding: 4px; }}
+            QTreeWidget::item {{ min-height: 27px; padding: 2px 6px; border-radius: 6px; }}
+            QTreeWidget::item:hover {{ background: {colors['button']}; }}
         """)
         panel_layout = QtWidgets.QVBoxLayout(panel)
         panel_layout.setContentsMargins(14, 14, 14, 14)
         panel_layout.setSpacing(6)
-        title = QtWidgets.QLabel("Tools")
-        title.setObjectName("chatToolsTitle")
+
+        title = QtWidgets.QLabel("Prompts & Shortcuts")
+        title.setObjectName("chatSidebarTitle")
         panel_layout.addWidget(title)
-        hint = QtWidgets.QLabel("Click prompts  |  Double-click tools and workflows")
-        hint.setObjectName("chatToolsHint")
+        hint = QtWidgets.QLabel("Click prompts  |  Double-click shortcuts")
+        hint.setObjectName("chatSidebarHint")
         panel_layout.addWidget(hint)
 
-        self.tools_tree = QtWidgets.QTreeWidget()
-        self.tools_tree.setHeaderHidden(True)
-        self.tools_tree.setRootIsDecorated(True)
-        self.tools_tree.setIndentation(14)
-        self.tools_tree.setFocusPolicy(QtCore.Qt.NoFocus)
-        self.tools_tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.sidebar_tree = QtWidgets.QTreeWidget()
+        self.sidebar_tree.setHeaderHidden(True)
+        self.sidebar_tree.setRootIsDecorated(True)
+        self.sidebar_tree.setIndentation(14)
+        self.sidebar_tree.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.sidebar_tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
         role = int(QtCore.Qt.UserRole)
-        for group_name, rows in CHAT_TOOL_GROUPS:
+        for group_name, entries in CHAT_SIDEBAR_GROUPS:
             group = QtWidgets.QTreeWidgetItem([group_name])
             group.setFlags(group.flags() & ~QtCore.Qt.ItemIsSelectable)
-            self.tools_tree.addTopLevelItem(group)
-            for label, kind, payload in rows:
-                execution_type = chat_tool_execution_type(kind, payload)
-                item = QtWidgets.QTreeWidgetItem([f"[{execution_type}] {label}"])
+            self.sidebar_tree.addTopLevelItem(group)
+            for label, kind, payload in entries:
+                tag = "Prompt" if kind == "prompt" else "Shortcut"
+                item = QtWidgets.QTreeWidgetItem([f"[{tag}] {label}"])
                 item.setData(0, role, kind)
                 item.setData(0, role + 1, payload)
-                item.setData(0, role + 2, execution_type)
-                if kind == "prompt":
-                    tooltip = f"{execution_type}: click once to prepare this chat prompt"
-                else:
-                    tooltip = f"{execution_type}: double-click to open this workflow or tool"
-                item.setToolTip(0, tooltip)
+                item.setToolTip(
+                    0,
+                    "Click once to place this template in the chat input."
+                    if kind == "prompt" else
+                    "Double-click to open this existing PseudoNote workflow.",
+                )
                 group.addChild(item)
             group.setExpanded(True)
-        self.tools_tree.itemClicked.connect(self._activate_chat_prompt)
-        self.tools_tree.itemDoubleClicked.connect(self._activate_chat_action)
-        panel_layout.addWidget(self.tools_tree, 1)
+
+        self.sidebar_tree.itemClicked.connect(self._sidebar_prompt_clicked)
+        self.sidebar_tree.itemDoubleClicked.connect(self._sidebar_shortcut_clicked)
+        panel_layout.addWidget(self.sidebar_tree, 1)
         return panel
 
-    def _activate_chat_prompt(self, item, column=0):
+    def _sidebar_prompt_clicked(self, item, _column=0):
         role = int(QtCore.Qt.UserRole)
-        if str(item.data(0, role) or "") == "prompt":
-            self._activate_chat_tool(item, column)
-
-    def _activate_chat_action(self, item, column=0):
-        role = int(QtCore.Qt.UserRole)
-        if str(item.data(0, role) or "") == "action":
-            self._activate_chat_tool(item, column)
-
-    def _activate_chat_tool(self, item, _column=0):
-        role = int(QtCore.Qt.UserRole)
-        kind = item.data(0, role)
-        payload = item.data(0, role + 1)
-        if not kind or not payload:
+        if str(item.data(0, role) or "") != "prompt":
             return
-        if str(kind) == "prompt":
-            self.input_box.input_box.setPlainText(str(payload))
-            self.input_box.setFocus()
+        self.input_box.input_box.setPlainText(str(item.data(0, role + 1) or ""))
+        self.input_box.setFocus()
+
+    def _sidebar_shortcut_clicked(self, item, _column=0):
+        role = int(QtCore.Qt.UserRole)
+        if str(item.data(0, role) or "") != "shortcut":
+            return
+        action_name = str(item.data(0, role + 1) or "")
+        if not action_name:
             return
 
-        confirmation = CONFIRM_CHAT_ACTIONS.get(str(payload))
+        confirmation = CONFIRM_SIDEBAR_SHORTCUTS.get(action_name)
         if confirmation:
             answer = QtWidgets.QMessageBox.question(
                 self.parent,
-                "Confirm PseudoNote Action",
+                "Confirm PseudoNote Shortcut",
                 f"Are you sure you want to {confirmation}?",
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                 QtWidgets.QMessageBox.No,
@@ -623,18 +591,10 @@ class IDAChatForm(ida_kernwin.PluginForm):
             if answer != QtWidgets.QMessageBox.Yes:
                 return
 
-        if str(payload) == "pseudonote_extended:analyze_struct":
-            try:
-                vdui = ida_hexrays.open_pseudocode(self.address, 0)
-                widget = getattr(vdui, "ct", None) if vdui else None
-                if widget:
-                    ida_kernwin.activate_widget(widget, True)
-            except Exception:
-                pass
+        if action_name == "pseudonote_extended:analyze_struct":
             self.add_message(
-                "Infer / Edit Structure needs a specific local variable. "
-                "In the pseudocode view, right-click directly on the variable name and choose "
-                "PseudoNote → Infer / Edit Structure.",
+                "To infer or edit a structure, right-click the target local variable in "
+                "the pseudocode view and choose PseudoNote → Infer / Edit Structure.",
                 is_user=False,
             )
             return
@@ -647,16 +607,16 @@ class IDAChatForm(ida_kernwin.PluginForm):
                 return
             ida_kernwin.activate_widget(widget, True)
 
-            def run_action():
-                if not ida_kernwin.process_ui_action(str(payload)):
+            def run_shortcut():
+                if not ida_kernwin.process_ui_action(action_name):
                     self.add_message(
-                        f"Could not start `{payload}` in the current IDA context.",
+                        f"Could not start the PseudoNote shortcut `{action_name}`.",
                         is_user=False,
                     )
 
-            QtCore.QTimer.singleShot(0, run_action)
+            QtCore.QTimer.singleShot(0, run_shortcut)
         except Exception as exc:
-            self.add_message(f"Tool failed: {exc}", is_user=False)
+            self.add_message(f"Shortcut failed: {exc}", is_user=False)
 
     def add_message(self, text, is_user=True):
         bubble = ChatBubble(text, is_user)
@@ -758,8 +718,8 @@ class IDAChatForm(ida_kernwin.PluginForm):
         if is_called_from_old and old_code:
             caller_context = f"\n\nContext - This function is called by `{old_name}`:\n```c\n{old_code}\n```"
         
-        self.system_prompt = build_chat_tool_prompt(
-            self.address, self.function_name, self.decompiled_code + caller_context,
+        self.system_prompt = build_chat_prompt(
+            self.function_name, self.decompiled_code, caller_context,
         )
         
         colors = get_ida_colors()
@@ -815,7 +775,7 @@ class IDAChatForm(ida_kernwin.PluginForm):
             self.parent, "Export PseudoNote Chat Log", f"chat_{self.function_name}.md",
             {"title": "PseudoNote Chat", "mode": "single_function", "function": self.function_name, "address": f"0x{self.address:X}"},
             self.history,
-            {"tool_audit": json.loads(self.tool_policy.export_json()), "context": {"decompiled_characters": len(self.decompiled_code)}},
+            {"context": {"decompiled_characters": len(self.decompiled_code)}},
         )
         if path:
             LOGGER.log(f"Chat log exported to {path}")
@@ -850,9 +810,6 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self.history.append({"role": "user", "content": text})
         self.save_history()
 
-        if self._try_direct_read_request(text):
-            return
-        
         AI_CLIENT = _ai_mod.AI_CLIENT
         if not AI_CLIENT:
             self.add_message("Error: AI Client not initialized.", is_user=False)
@@ -862,13 +819,6 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self.typing_container.setVisible(True)
         self._received_chars = 0
         self._continuation_count = 0
-        self._chat_tool_rounds = 0
-        self._chat_protocol_repairs = 0
-        self._chat_finalize_requested = False
-        self.tool_policy = new_chat_policy()
-        self.tool_policy.allow_mutations = self.allow_changes_cb.isChecked()
-        self._chat_tool_signatures = set()
-        self._successful_tool_results = []
         self.progress_details.setText("Connecting...")
         
         # Ensure UI updates immediately
@@ -885,233 +835,58 @@ class IDAChatForm(ida_kernwin.PluginForm):
         self._active_request_id = AI_CLIENT.query_model_async(self.history, callback, on_chunk=on_chunk)
 
     def handle_response(self, response, token=None, **kwargs):
+        """Finish a normal conversational response without any tool/decision loop."""
         if token is not None and not self._request_is_current(token):
             return
         finish_reason = kwargs.get("finish_reason", "stop")
-        
+
         if finish_reason == "length" and response and self._continuation_count < 2:
             self._continuation_count += 1
-            # We don't hide typing indicator if continuing
             self.progress_details.setText(f"Continuing... ({len(response)} chars so far)")
             QtWidgets.QApplication.processEvents()
-            
-            AI_CLIENT = _ai_mod.AI_CLIENT
-            
-            # Temporary history for continuation prompt
-            # We don't want to pollute real history yet
-            cont_history = self.history + [{"role": "assistant", "content": response}]
-            cont_prompt = "The previous response was cut off. Please continue from exactly where you left off. Do not repeat what you already said."
-            cont_history.append({"role": "user", "content": cont_prompt})
-            
-            def on_c_chunk(text):
-                if token is not None and not self._request_is_current(token):
-                    return
-                self._received_chars += len(text)
-                self.progress_details.setText(f"Streaming (Continued): {self._received_chars} chars")
+            client = _ai_mod.AI_CLIENT
+            if client:
+                continuation_history = self.history + [
+                    {"role": "assistant", "content": response},
+                    {
+                        "role": "user",
+                        "content": (
+                            "The previous response was cut off. Continue from exactly where "
+                            "you stopped without repeating earlier text."
+                        ),
+                    },
+                ]
 
-            def on_c_fin(new_resp, **c_kwargs):
-                full_resp = response + (new_resp or "")
-                self.handle_response(full_resp, token=token, **c_kwargs)
+                def on_chunk(text):
+                    if token is not None and not self._request_is_current(token):
+                        return
+                    self._received_chars += len(text)
+                    self.progress_details.setText(
+                        f"Streaming (Continued): {self._received_chars} chars"
+                    )
 
-            self._active_request_id = AI_CLIENT.query_model_async(cont_history, on_c_fin, on_chunk=on_c_chunk)
-            return
+                def on_finished(new_response, **new_kwargs):
+                    combined = response + (new_response or "")
+                    self.handle_response(combined, token=token, **new_kwargs)
+
+                self._active_request_id = client.query_model_async(
+                    continuation_history, on_finished, on_chunk=on_chunk,
+                )
+                return
 
         self._active_request_id = None
-
-        envelope, envelope_error = parse_agent_response(response or "")
-        if envelope is None and envelope_error and '"action"' in str(response or ""):
-            if self._chat_protocol_repairs < 1:
-                self._chat_protocol_repairs += 1
-                self.history.append({
-                    "role": "system",
-                    "content": (
-                        f"Your previous tool envelope was invalid ({envelope_error}). "
-                        "Return one corrected JSON envelope only. Use at most four tool calls; "
-                        "split additional calls into a later round."
-                    ),
-                })
-                self.progress_details.setText("Correcting invalid tool request...")
-                self._request_chat_tool_followup(token)
-                return
-            response = (
-                "The model repeatedly returned an invalid internal tool request, so the investigation "
-                "was stopped without displaying protocol JSON. Please retry the skill."
-            )
-            envelope = {"action": "final", "report": response}
-        if envelope and envelope.get("action") == "tools":
-            if self._chat_tool_rounds >= self._max_chat_tool_rounds:
-                if self._chat_finalize_requested:
-                    response = (
-                        "I stopped after the regular-chat tool limit was reached. "
-                        "Please narrow the request or use Autonomous Investigation for a deeper workflow."
-                    )
-                    envelope = {"action": "final", "report": response}
-                else:
-                    self._chat_finalize_requested = True
-                    self.history.append({
-                        "role": "system",
-                        "content": "Tool-round limit reached. Return action=final now using existing evidence.",
-                    })
-                    self._request_chat_tool_followup(token)
-                    return
-            if envelope.get("action") != "tools":
-                response = envelope["report"]
-            else:
-                self._chat_tool_rounds += 1
-                observations = []
-                change_cancelled = False
-                changes_disabled = False
-                for call in envelope["calls"]:
-                    tool_name, args = call["tool"], call["args"]
-                    signature = json.dumps(
-                        [tool_name, args], sort_keys=True, ensure_ascii=False, default=str
-                    )
-                    if signature in self._chat_tool_signatures:
-                        result = "Skipped: Identical tool call already attempted in this request."
-                    else:
-                        self._chat_tool_signatures.add(signature)
-                        result = execute_chat_tool(
-                            self.tool_policy, tool_name, args, self.address, self._confirm_chat_tool,
-                        )
-                        if not result.startswith(("Error:", "Skipped:")):
-                            self._successful_tool_results.append((tool_name, result))
-                    if "User denied this IDA-changing tool call" in result:
-                        change_cancelled = True
-                    if "read-only mode blocks IDA-changing tools" in result:
-                        changes_disabled = True
-                    observations.append(self.tool_policy.untrusted_result(tool_name, result))
-                    summary = result[:220] + ("..." if len(result) > 220 else "")
-                    self.add_message(f"Tool `{tool_name}`: {summary}", is_user=False)
-                self.history.append({"role": "system", "content": "\n\n".join(observations)})
-                if change_cancelled or changes_disabled:
-                    response = (
-                        "IDA changes are disabled. Turn on Enable IDA changes and ask again; each proposed "
-                        "operation will still be shown for review."
-                        if changes_disabled else
-                        "IDA change cancelled. Nothing was modified. Ask again when you are ready to "
-                        "review the proposed operation."
-                    )
-                    self.history.append({"role": "assistant", "content": response})
-                    self.add_message(response, is_user=False)
-                    self.typing_container.setVisible(False)
-                    self.progress_details.setText("")
-                    self.input_box.setEnabled(True)
-                    self.input_box.setFocus()
-                    self.save_history()
-                    return
-                self._request_chat_tool_followup(token)
-                return
-
-        if envelope and envelope.get("action") == "final":
-            response = envelope["report"]
-        elif envelope_error and response:
-            # Compatibility fallback for providers that ignore the JSON envelope.
-            response = response.strip()
-
         self.typing_container.setVisible(False)
         self.progress_details.setText("")
         self.input_box.setEnabled(True)
         self.input_box.setFocus()
-        
+
         if response:
             self.history.append({"role": "assistant", "content": response})
             self.add_message(response, is_user=False)
             self.save_history()
         else:
-            self.add_message("Error: No response from AI.", is_user=False)
-
-    def _direct_read_tool(self, text):
-        return direct_read_tool(text)
-
-    def _format_tool_result(self, tool_name, result):
-        titles = {
-            "decompile": ("Hex-Rays pseudocode", "c"),
-            "disassemble": ("IDA disassembly", "asm"),
-            "get_xrefs": ("Callers and callees", "text"),
-            "stack_layout": ("Variables and stack layout", "text"),
-            "basic_blocks": ("Basic blocks", "text"),
-        }
-        title, language = titles.get(tool_name, (tool_name.replace("_", " ").title(), "text"))
-        if str(result).startswith("Error:"):
-            return f"**{title} failed:** {result}"
-        if tool_name == "stack_layout":
-            try:
-                rows = json.loads(result)
-                lines = []
-                for row in rows:
-                    roles = []
-                    if row.get("argument"): roles.append("argument")
-                    if row.get("result"): roles.append("result")
-                    role = f" [{', '.join(roles)}]" if roles else ""
-                    lines.append(
-                        f"- `{row.get('name') or '<unnamed>'}`: "
-                        f"`{row.get('type') or 'unknown type'}`{role} — {row.get('location') or 'unknown storage'}"
-                    )
-                body = "\n".join(lines) if lines else "- No Hex-Rays variables were reported."
-                return f"### {title}\n\n{body}"
-            except (TypeError, ValueError):
-                pass
-        if tool_name == "basic_blocks":
-            try:
-                rows = json.loads(result)
-                lines = [
-                    "Shows the primary function body's control-flow structure: branches, merges, loops, and exits."
-                ]
-                for row in rows:
-                    successors = row.get("successors") or []
-                    destination = ", ".join(f"B{item}" for item in successors) if successors else "exit"
-                    lines.append(
-                        f"- **B{row.get('id')}**: `{row.get('start')}`–`{row.get('end')}` → {destination}"
-                    )
-                if not rows:
-                    lines.append("- No primary-body blocks were reported.")
-                return f"### {title}\n\n" + "\n".join(lines)
-            except (TypeError, ValueError):
-                pass
-        return f"### {title}\n\n```{language}\n{result}\n```"
-
-    def _try_direct_read_request(self, text):
-        tool_name = self._direct_read_tool(text)
-        if not tool_name:
-            return False
-        policy = new_chat_policy()
-        result = execute_chat_tool(
-            policy, tool_name, {"ea": self.address}, self.address,
-            lambda *_args: False,
-        )
-        response = self._format_tool_result(tool_name, result)
-        self.history.append({"role": "assistant", "content": response})
-        self.add_message(response, is_user=False)
-        self.save_history()
-        return True
-
-    def _confirm_chat_tool(self, tool_name, args, category):
-        preview = json.dumps(args, indent=2, ensure_ascii=False)[:3000]
-        dialog = QtWidgets.QMessageBox(self.parent)
-        dialog.setWindowTitle("Review IDA Change")
-        dialog.setIcon(QtWidgets.QMessageBox.Question)
-        dialog.setText(f"Apply the proposed {tool_name} operation?")
-        dialog.setInformativeText(
-            "Review the arguments below. This operation changes the IDA database."
-        )
-        dialog.setDetailedText(f"Category: {category}\n\nArguments:\n{preview}")
-        apply_btn = dialog.addButton("Apply Change", QtWidgets.QMessageBox.AcceptRole)
-        cancel_btn = dialog.addButton("Cancel", QtWidgets.QMessageBox.RejectRole)
-        dialog.setDefaultButton(cancel_btn)
-        dialog.exec_()
-        return dialog.clickedButton() is apply_btn
-
-    def _request_chat_tool_followup(self, token):
-        if not self._request_is_current(token):
-            return
-        client = _ai_mod.AI_CLIENT
-        if not client:
-            return
-        self.typing_container.setVisible(True)
-        self.input_box.setEnabled(False)
-        self.progress_details.setText("Using IDA tool results...")
-        callback = lambda response, **kwargs: self.handle_response(response, token=token, **kwargs)
-        self._active_request_id = client.query_model_async(self.history, callback)
+            error_msg = str(kwargs.get("error_msg") or "No response from AI.")
+            self.add_message(f"Error: {error_msg}", is_user=False)
 
     def OnClose(self, form):
         self._closed = True

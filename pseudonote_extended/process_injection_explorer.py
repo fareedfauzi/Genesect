@@ -14,6 +14,7 @@ import idc
 from pseudonote_extended.qt_compat import QtCore, QtWidgets
 from pseudonote_extended.ui.components import PageHeader, Card
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
+from pseudonote_extended.api_knowledge import normalize_api_name, taxonomy_entry
 
 
 _explorer = None
@@ -60,14 +61,15 @@ def _row(category, site, primitive="", technique="", confidence="high", evidence
 
 def _api_calls():
     for api_ea, api_name in idautils.Names():
-        category = next((label for label, pattern in _PRIMITIVES if pattern.search(api_name or "")), None)
+        normalized = normalize_api_name(api_name)
+        category = next((label for label, pattern in _PRIMITIVES if pattern.search(normalized)), None)
         if not category:
             continue
         for xref in idautils.XrefsTo(api_ea, 0):
             if xref.type in (getattr(idaapi, "fl_CF", 16), getattr(idaapi, "fl_CN", 17)):
                 owner = _func_start(xref.frm)
                 if owner != idaapi.BADADDR:
-                    yield category, int(xref.frm), api_name
+                    yield category, int(xref.frm), normalized
 
 
 def _has_create_suspended(site, limit=20):
@@ -93,6 +95,9 @@ def scan_injection_primitives():
     rows, by_function = [], {}
     for category, site, api_name in _api_calls():
         detail = idc.generate_disasm_line(site, 0) or ""
+        taxonomy = taxonomy_entry(api_name)
+        if taxonomy:
+            detail += "\nTaxonomy: %s (%s)" % (taxonomy["category"], taxonomy["severity"])
         if category == "Process creation":
             flag_site = _has_create_suspended(site)
             if flag_site != idaapi.BADADDR:
@@ -234,13 +239,20 @@ class ProcessInjectionExplorer(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            values = [row["category"], _hex(row["site"]), row["function"], row["primitive"], row["technique"], row["confidence"], row["evidence"]]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, row in enumerate(self.rows):
+                values = [row["category"], _hex(row["site"]), row["function"], row["primitive"], row["technique"], row["confidence"], row["evidence"]]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(6, max(400, self.table.columnWidth(6)))
         self.table.setSortingEnabled(True)
@@ -257,6 +269,8 @@ class ProcessInjectionExplorer(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None and 0 <= int(index) < len(self.rows) else None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for row_index in range(self.table.rowCount()):
             source = self.rows[int(self.table.item(row_index, 0).data(QtCore.Qt.UserRole))]

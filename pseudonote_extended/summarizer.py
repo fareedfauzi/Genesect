@@ -1,4 +1,5 @@
 import idaapi
+from pseudonote_extended.qt_compat import PluginFormWrapper
 import ida_funcs
 import ida_kernwin
 import idautils
@@ -308,12 +309,12 @@ class SortableFunctionPreviewItem(QtWidgets.QTreeWidgetItem):
 
 
 class SummarizerDialog(QtWidgets.QDialog):
-    def __init__(self, entry_ea):
-        super().__init__(None) # No parent so it acts as top-level
+    def __init__(self, entry_ea, parent=None):
+        super().__init__(parent) # Anchor to parent to prevent UI glitching
         self.entry_ea = entry_ea
         self.setWindowTitle("PseudoNote - Function Chain Summarizer")
         self.resize(1100, 750)
-        self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
         
         self.worker = None
         self.preview_worker = None
@@ -353,6 +354,7 @@ class SummarizerDialog(QtWidgets.QDialog):
         self.entry_selector = SearchableFunctionSelector(self)
         self.entry_selector.setFont(QtGui.QFont("Consolas", 10))
         self.entry_selector.functionSelected.connect(self.on_entry_function_selected)
+        self.entry_dropdown_btn = self.entry_selector.create_dropdown_button(target_group)
         
         self.entry_change_btn = QPushButton("Load Current Function")
         self.entry_change_btn.setObjectName("primary")
@@ -360,6 +362,7 @@ class SummarizerDialog(QtWidgets.QDialog):
 
         target_layout.addWidget(entry_lbl)
         target_layout.addWidget(self.entry_selector, 1)
+        target_layout.addWidget(self.entry_dropdown_btn)
         target_layout.addWidget(self.entry_change_btn)
 
         # Configs inside Target
@@ -733,7 +736,8 @@ class SummarizerHandler(idaapi.action_handler_t):
             return 1
             
         self.dlg = SummarizerDialog(f.start_ea)
-        self.dlg.show()
+        self._wrapper = PluginFormWrapper(self.dlg, "PseudoNote - Function Summarizer")
+        self._wrapper.show_form()
         return 1
         
     def update(self, ctx):

@@ -19,6 +19,10 @@ class RequestedMenuAndHighlightDefaultsTests(unittest.TestCase):
         self.assertIn('fallback="#ffaaff"', CONFIG)
         self.assertIn("0xFFAAFF", HIGHLIGHT)
 
+    def test_call_highlighting_is_opt_in_for_large_linear_views(self):
+        self.assertIn("disasm_highlight_enabled = False", HIGHLIGHT)
+        self.assertIn('"Ctrl+Shift+H"', PLUGIN)
+
     def test_saving_settings_does_not_require_api_key(self):
         self.assertIn("validate_profile(profile, require_api_key=False)", VIEW)
         self.assertIn("API Key (Optional for saving):", VIEW)

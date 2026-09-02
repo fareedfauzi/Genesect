@@ -210,7 +210,7 @@ class VftableChooser(ida_kernwin.Choose):
             ["Function", 36], ["Direct callers", 44], ["Vftable users", 44],
         ]
         super(VftableChooser, self).__init__(
-            "PseudoNote - Browse Virtual Tables", columns,
+            "PseudoNote - VTable Explorer", columns,
             flags=ida_kernwin.Choose.CH_CAN_REFRESH,
         )
         self._rescan()

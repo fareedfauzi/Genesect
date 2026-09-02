@@ -250,6 +250,8 @@ class VirtualClassExplorer(ida_kernwin.PluginForm):
         return None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for index in range(self.tree.topLevelItemCount()):
             root = self.tree.topLevelItem(index)

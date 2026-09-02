@@ -158,8 +158,6 @@ def show_ui_preview():
     if _preview_dialog is None:
         _preview_dialog = UIComponentPreview()
     _preview_dialog.show()
-    _preview_dialog.raise_()
-    _preview_dialog.activateWindow()
     return _preview_dialog
 
 

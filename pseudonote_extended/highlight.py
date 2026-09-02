@@ -41,9 +41,11 @@ def get_highlight_color():
     return color
 
 pseudocode_highlight_enabled = False
-# Assembly call highlighting is enabled by default. It remains independent of
-# pseudocode highlighting and can still be disabled from the context menu.
-disasm_highlight_enabled = True
+# Assembly call highlighting is opt-in. IDA normally opens a linear
+# disassembly view, where eagerly scanning a very large function or segment
+# can make startup and navigation sluggish. Users can enable it explicitly
+# with Toggle Call Highlight (Assembly) / Ctrl+Shift+H.
+disasm_highlight_enabled = False
 # Backward-compatible alias used by the settings dialog. It reflects the
 # pseudocode highlighter, which was the original meaning of this setting.
 highlight_plugin_enabled = False

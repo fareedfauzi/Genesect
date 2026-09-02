@@ -15,6 +15,8 @@ class CopyOutputReportingTests(unittest.TestCase):
         self.assertGreaterEqual(SOURCE.count("_report_full_copied_output(output)"), 2)
         self.assertIn('ida_kernwin.msg("[PseudoNote] Copied:\\n")', SOURCE)
         self.assertIn("text[offset:offset + chunk_size]", SOURCE)
+        self.assertIn("if len(text) <= 800:", SOURCE)
+        self.assertIn("ida_kernwin.info(notice)", SOURCE)
 
     def test_old_sixty_character_preview_is_removed(self):
         self.assertNotIn("preview = output.replace", SOURCE)

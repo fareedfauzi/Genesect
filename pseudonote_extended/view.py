@@ -299,7 +299,6 @@ class ProgressOverlay(QtWidgets.QDialog):
             self.details_label.setText("Preparing...")
         
         # Always use NonModal for PseudoNote to prevent deadlocks with execute_sync
-        self.setWindowModality(QtCore.Qt.NonModal)
         
         # Center in IDA only if it's the first show
         if not hasattr(self, "_user_moved") or not self.isVisible():
@@ -310,7 +309,6 @@ class ProgressOverlay(QtWidgets.QDialog):
             self._user_moved = True
             
         self.show()
-        self.raise_()
 
     def update_details(self, chars, status_text=None):
         if status_text:
@@ -413,12 +411,7 @@ if QtWidgets:
 
     class SettingsDialog(QtWidgets.QDialog):
         def __init__(self, config, parent=None, hide_extra_tabs=False, mode=None):
-            # Do not give Settings a native owner from IDA's dock hierarchy.
-            # Hex-Rays pseudocode uses a different native/DPI host than the
-            # disassembly view; an owned dialog can be rescaled to that host's
-            # client width while Windows leaves its old surface behind.
-            # exec_() supplies the modal event loop without that ownership.
-            super().__init__(None)
+            super().__init__(parent)
             self.config = config
             self.hide_extra_tabs = hide_extra_tabs
             self.mode = mode
@@ -1035,21 +1028,24 @@ if QtWidgets:
             self.indent_guides_enabled_cb = QtWidgets.QCheckBox("Show colorful nesting marks in Hex-Rays pseudocode")
             self.indent_guides_enabled_cb.setChecked(bool(getattr(self.config, 'indent_guides_enabled', False)))
             guides_layout.addRow(self.indent_guides_enabled_cb)
-            self.indent_guides_style_combo = QtWidgets.QComboBox()
-            self.indent_guides_style_combo.addItems(["Subtle", "Dotted", "Strong"])
-            self.indent_guides_style_combo.setCurrentText(str(getattr(self.config, 'indent_guides_style', 'Subtle')))
-            guides_layout.addRow("Mark Style:", self.indent_guides_style_combo)
-            self.indent_guides_width_spin = QtWidgets.QSpinBox()
-            self.indent_guides_width_spin.setRange(0, 8)
-            self.indent_guides_width_spin.setSpecialValueText("Auto")
-            self.indent_guides_width_spin.setValue(int(getattr(self.config, 'indent_guides_width', 0)))
-            self.indent_guides_width_spin.setToolTip("Auto follows Hex-Rays indentation. Use a fixed width only for custom formatting.")
-            guides_layout.addRow("Mark Spacing:", self.indent_guides_width_spin)
-            self.indent_guides_empty_cb = QtWidgets.QCheckBox("Continue marks through empty lines")
-            self.indent_guides_empty_cb.setChecked(bool(getattr(self.config, 'indent_guides_empty_lines', True)))
-            guides_layout.addRow(self.indent_guides_empty_cb)
+
+            self.indent_guides_color = str(getattr(self.config, 'indent_guides_color', '#57CFDC'))
+            self.indent_guides_color_btn = QtWidgets.QPushButton(self.indent_guides_color.upper())
+            self._update_indent_color_button()
+            self.indent_guides_color_btn.clicked.connect(self.pick_indent_guides_color)
+            guides_layout.addRow("Mark Color:", self.indent_guides_color_btn)
             guides_grp.setLayout(guides_layout)
             layout.addWidget(guides_grp)
+            
+            fold_grp = QtWidgets.QGroupBox("Code Block Folding")
+            fold_layout = QtWidgets.QFormLayout()
+            self.fold_color = str(getattr(self.config, 'pseudocode_folding_color', '#3F3F3F'))
+            self.fold_color_btn = QtWidgets.QPushButton(self.fold_color.upper())
+            self._update_fold_color_button()
+            self.fold_color_btn.clicked.connect(self.pick_fold_color)
+            fold_layout.addRow("Highlight Color:", self.fold_color_btn)
+            fold_grp.setLayout(fold_layout)
+            layout.addWidget(fold_grp)
             
             layout.addStretch()
             self.appearance_tab.setLayout(layout)
@@ -1063,6 +1059,30 @@ if QtWidgets:
                 txt_col = "#000" if c_sum > 382 else "#FFF"
                 self.hl_color = hex_color
                 self.hl_btn.setStyleSheet(f"background-color: {hex_color}; color: {txt_col}; font-weight: bold; border: 1px solid #AAA; padding: 3px;")
+
+        def _update_indent_color_button(self):
+            color = QtGui.QColor(self.indent_guides_color)
+            text_color = "#000" if color.red() + color.green() + color.blue() > 382 else "#FFF"
+            self.indent_guides_color_btn.setText(color.name().upper())
+            self.indent_guides_color_btn.setStyleSheet("background-color: %s; color: %s; font-weight: bold; border: 1px solid #AAA; padding: 3px;" % (color.name(), text_color))
+
+        def pick_indent_guides_color(self):
+            color = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.indent_guides_color), self, "Pick Indent Mark Color")
+            if color.isValid():
+                self.indent_guides_color = color.name().upper()
+                self._update_indent_color_button()
+
+        def _update_fold_color_button(self):
+            color = QtGui.QColor(self.fold_color)
+            text_color = "#000" if color.red() + color.green() + color.blue() > 382 else "#FFF"
+            self.fold_color_btn.setText(color.name().upper())
+            self.fold_color_btn.setStyleSheet("background-color: %s; color: %s; font-weight: bold; border: 1px solid #AAA; padding: 3px;" % (color.name(), text_color))
+
+        def pick_fold_color(self):
+            color = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.fold_color), self, "Pick Code Block Highlight Color")
+            if color.isValid():
+                self.fold_color = color.name().upper()
+                self._update_fold_color_button()
 
         def init_analyzer_tab(self):
             layout = QtWidgets.QVBoxLayout()
@@ -1090,6 +1110,11 @@ if QtWidgets:
             self.deep_cooldown_spin.setRange(0, 300)
             self.deep_cooldown_spin.setValue(getattr(self.config, 'deep_cooldown', 0))
             fl.addRow("Cooldown (s):", self.deep_cooldown_spin)
+
+            self.agent_cooldown_spin = QtWidgets.QSpinBox()
+            self.agent_cooldown_spin.setRange(0, 1000)
+            self.agent_cooldown_spin.setValue(getattr(self.config, 'agent_cooldown', 240))
+            fl.addRow("Agent Rate Limit (429) Wait (s):", self.agent_cooldown_spin)
 
             perf_grp.setLayout(fl)
             layout.addWidget(perf_grp)
@@ -1245,7 +1270,7 @@ if QtWidgets:
             if not validation.valid:
                 QtWidgets.QMessageBox.warning(
                     self, "Invalid provider configuration",
-                    "\n".join(f"â€¢ {error}" for error in validation.errors),
+                    "\n".join(f"• {error}" for error in validation.errors),
                 )
                 return
             c = self.config
@@ -1285,9 +1310,8 @@ if QtWidgets:
                 
                 c.highlight_color = self.hl_color
                 c.indent_guides_enabled = self.indent_guides_enabled_cb.isChecked()
-                c.indent_guides_style = self.indent_guides_style_combo.currentText()
-                c.indent_guides_width = self.indent_guides_width_spin.value()
-                c.indent_guides_empty_lines = self.indent_guides_empty_cb.isChecked()
+                c.indent_guides_color = self.indent_guides_color
+                c.pseudocode_folding_color = getattr(self, 'fold_color', '#3F3F3F')
 
             # Bulk Renamer tab settings
             if hasattr(self, 'force_rename_cb'):
@@ -1348,6 +1372,8 @@ if QtWidgets:
                 c.deep_parallel_workers = self.deep_workers_spin.value()
                 c.deep_cooldown = self.deep_cooldown_spin.value()
                 c.deep_max_lines = self.deep_lines_spin.value()
+            if hasattr(self, 'agent_cooldown_spin'):
+                c.agent_cooldown = self.agent_cooldown_spin.value()
 
                 # These pipeline stages are always enabled; variable rename is controlled
                 # by the toggle in the main Deep Analyzer dialog toolbar.
@@ -1387,8 +1413,8 @@ if QtWidgets:
             except Exception:
                 pass
             try:
-                from pseudonote_extended.indent import refresh_current_pseudocode
-                refresh_current_pseudocode()
+                from pseudonote_extended.indent import refresh_open_pseudocode_widgets
+                refresh_open_pseudocode_widgets()
             except Exception:
                 pass
             

@@ -1,12 +1,12 @@
 """Lifecycle activation for default call highlighting and indentation marks."""
 
 import idaapi
+import ida_auto
 import ida_kernwin
 
 from pseudonote_extended.qt_compat import QtCore
 from pseudonote_extended.indent import (
     create_indent_guide_hooks,
-    indent_guide_hooks_installed,
     refresh_open_pseudocode_widgets,
     refresh_pseudocode_widget,
 )
@@ -17,27 +17,35 @@ _activation_generation = 0
 _active = False
 
 
+def _autoanalysis_complete():
+    check = getattr(ida_auto, "auto_is_ok", None)
+    if not callable(check):
+        return True
+    try:
+        return bool(check())
+    except Exception:
+        return True
+
+
 def _apply_to_view(widget=None, scan_pseudocode=False):
-    if not _active:
+    if not _active or not _autoanalysis_complete():
         return
     # PLUGIN_FIX plugins can start before the decompiler is initialized.  The
     # first hook attempt may therefore fail even though Hex-Rays becomes
     # available moments later.  Retry from every bounded UI lifecycle pass;
     # create_indent_guide_hooks() is idempotent once installed.
     from pseudonote_extended.config import CONFIG
-    installed_before = indent_guide_hooks_installed()
     if bool(getattr(CONFIG, "indent_guides_enabled", True)):
         create_indent_guide_hooks()
-    installed_late = not installed_before and indent_guide_hooks_installed()
     if scan_pseudocode:
-        refresh_open_pseudocode_widgets(regenerate=installed_late)
+        refresh_open_pseudocode_widgets()
     widget = widget or ida_kernwin.get_current_widget()
     if not widget:
         return
     widget_type = idaapi.get_widget_type(widget)
     if widget_type == idaapi.BWN_PSEUDOCODE:
         if bool(getattr(CONFIG, "indent_guides_enabled", True)):
-            refresh_pseudocode_widget(widget, regenerate=installed_late)
+            refresh_pseudocode_widget(widget)
     elif widget_type in (idaapi.BWN_DISASM, idaapi.BWN_DISASMS):
         from pseudonote_extended.highlight import refresh_disasm_highlighting
         refresh_disasm_highlighting()
@@ -46,6 +54,11 @@ def _apply_to_view(widget=None, scan_pseudocode=False):
 def schedule_default_visual_activation(delay_ms=75, coalesce=True, widget=None, scan_pseudocode=False):
     """Run after IDA completes the current widget/session transition."""
     global _activation_generation
+    # Fresh-binary loading can generate a huge number of UI notifications.
+    # Never allocate Qt timers from that event storm; wait for normal widget
+    # lifecycle activity after IDA's auto-analysis has completed.
+    if not _active or not _autoanalysis_complete():
+        return
     if QtCore:
         if not coalesce:
             QtCore.QTimer.singleShot(
@@ -79,9 +92,6 @@ class DefaultVisualHooks(idaapi.UI_Hooks):
 
     def widget_visible(self, widget):
         schedule_default_visual_activation(75, widget=widget)
-
-    def screen_ea_changed(self, ea, previous_ea):
-        schedule_default_visual_activation(75)
 
 
 def create_default_visual_hooks():

@@ -25,7 +25,6 @@ class PrimaryMenuPlacementTests(unittest.TestCase):
             "pseudonote_extended:toggle_disasm_highlight",
             "pseudonote_extended:toggle_indent_guides",
             "pseudonote_extended:hex_viewer",
-            "pseudonote_extended:change_history_explorer",
         ):
             self.assertIn(action_id, CONTEXT)
 

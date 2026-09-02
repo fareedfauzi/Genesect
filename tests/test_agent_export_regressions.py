@@ -27,7 +27,10 @@ class AgentExportRegressionTests(unittest.TestCase):
 
     def test_one_fully_repeated_batch_forces_synthesis(self):
         self.assertIn("all_calls_repeated = True", SOURCE)
-        self.assertRegex(SOURCE, re.compile(r"if all_calls_repeated:\s+self\._must_finalize = True"))
+        self.assertRegex(
+            SOURCE,
+            re.compile(r'if all_calls_repeated and self\._task_profile != "autonomous_full":\s+self\._must_finalize = True'),
+        )
 
 
 if __name__ == "__main__":

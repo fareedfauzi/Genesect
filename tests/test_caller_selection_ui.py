@@ -22,19 +22,18 @@ class CallerSelectionUiTests(unittest.TestCase):
         self.assertIn("def _set_all_checked", section)
         self.assertIn("def _update_selection_count", section)
 
-    def test_caller_dialog_avoids_glitchy_workspace_skin_and_routes_buttons_directly(self):
+    def test_caller_dialog_uses_normal_native_button_box(self):
         start = HANDLERS.index("class CallerSelectionDialog")
         end = HANDLERS.index("def _get_caller_context_texts", start)
         section = HANDLERS[start:end]
         self.assertNotIn("apply_mac_workspace(self)", section)
-        self.assertIn("super(CallerSelectionDialog, self).__init__(None)", section)
-        self.assertIn("self.ok_button.clicked.connect(self.accept)", section)
-        self.assertIn("self.cancel_button.clicked.connect(self.reject)", section)
-        self.assertIn("self.ok_button.setDefault(True)", section)
+        self.assertIn("super().__init__(parent)", section)
+        self.assertIn("btn_box.accepted.connect(self.accept)", section)
+        self.assertIn("btn_box.rejected.connect(self.reject)", section)
 
-    def test_caller_modal_moves_off_hexrays_native_viewport(self):
-        self.assertIn("from pseudonote_extended.ui.modal_safety import exec_modal", HANDLERS)
-        self.assertIn('exec_modal(dialog, "PseudoNote Caller Context Host", target_func_ea)', HANDLERS)
+    def test_caller_modal_uses_normal_qt_execution(self):
+        self.assertNotIn("modal_safety", HANDLERS)
+        self.assertIn("if dialog.exec_() == QtWidgets.QDialog.Accepted", HANDLERS)
 
 
 if __name__ == "__main__":

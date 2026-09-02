@@ -267,3 +267,71 @@ except ImportError:
 anthropic = None
 genai = None
 gemini_backend = None
+
+
+def get_ida_main_window():
+    try:
+        import ida_kernwin
+        if hasattr(ida_kernwin, 'get_parent_widget'):
+            w = ida_kernwin.get_parent_widget(None)
+            if w: return w
+    except Exception:
+        pass
+
+    if QtWidgets:
+        for widget in QtWidgets.QApplication.topLevelWidgets():
+            if isinstance(widget, QtWidgets.QMainWindow):
+                return widget
+    return None
+    for widget in QtWidgets.QApplication.topLevelWidgets():
+        if widget.inherits('QMainWindow') and 'IDA' in widget.windowTitle():
+            return widget
+    return None
+
+def get_ida_main_window():
+    try:
+        import ida_kernwin
+        if hasattr(ida_kernwin, 'get_parent_widget'):
+            w = ida_kernwin.get_parent_widget(None)
+            if w: return w
+    except Exception:
+        pass
+
+    if QtWidgets:
+        for widget in QtWidgets.QApplication.topLevelWidgets():
+            if isinstance(widget, QtWidgets.QMainWindow):
+                return widget
+    return None
+
+
+import ida_kernwin
+class PluginFormWrapper(ida_kernwin.PluginForm):
+    def __init__(self, dialog_inst, title):
+        super().__init__()
+        self.dialog = dialog_inst
+        self.title = title
+
+    def OnCreate(self, form):
+        # We need PyQt/PySide imports inside here
+        from pseudonote_extended.qt_compat import QtWidgets, QtCore
+        try:
+            self.parent_widget = self.FormToPySideWidget(form)
+        except AttributeError:
+            self.parent_widget = self.FormToPyQtWidget(form)
+            
+        layout = QtWidgets.QVBoxLayout(self.parent_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.dialog.setParent(self.parent_widget)
+        self.dialog.setWindowFlags(QtCore.Qt.Widget)
+        layout.addWidget(self.dialog)
+        self.dialog.show()
+
+    def OnClose(self, form):
+        if hasattr(self.dialog, 'closeEvent'):
+            from pseudonote_extended.qt_compat import QtGui
+            self.dialog.closeEvent(QtGui.QCloseEvent())
+
+    def show_form(self):
+        return self.Show(self.title, options=ida_kernwin.PluginForm.WOPN_TAB | ida_kernwin.PluginForm.WOPN_RESTORE)
+

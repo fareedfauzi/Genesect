@@ -17,17 +17,24 @@ from pseudonote_extended.qt_compat import QtCore, QtWidgets
 from pseudonote_extended.ui.components import PageHeader, Card
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
 from pseudonote_extended.global_explorer import scan_globals
+from pseudonote_extended.api_knowledge import normalize_api_name
 
 
-_explorer = None
+_thread_explorer = None
+_synchronization_explorer = None
 _THREAD_API = re.compile(r"(?:createthread|createremotethread|_beginthreadex?|pthread_create|std::thread|rtlcreateuserthread|ntcreatethread)", re.I)
 _SYNC_API = re.compile(
-    r"(?:criticalsection|srwlock|mutex|semaphore|event|waitforsingleobject|waitformultipleobjects|"
-    r"pthread_(?:mutex|rwlock|cond|spin)|monitorenter|monitorexit|interlocked|atomic|futex|lock|unlock)", re.I,
+    r"(?:initializecriticalsection(?:ex|andspincount)?|deletecriticalsection|"
+    r"(?:enter|tryenter|leave)criticalsection|(?:acquire|release)srwlock(?:exclusive|shared)|"
+    r"(?:create|open|release)mutex(?:a|w)?|(?:create|open|release)semaphore(?:ex)?(?:a|w)?|"
+    r"(?:create|open|set|reset|pulse)event(?:ex)?(?:a|w)?|"
+    r"waitforsingleobject(?:ex)?|waitformultipleobjects(?:ex)?|signalobjectandwait|"
+    r"pthread_(?:mutex|rwlock|cond|spin)_(?:init|destroy|lock|trylock|unlock|wait|signal|broadcast)|"
+    r"monitorenter|monitorexit|interlocked[a-z0-9_]*|(?:^|_)futex(?:$|_)|std::(?:recursive_)?mutex::(?:lock|try_lock|unlock))", re.I,
 )
-_QUEUE_API = re.compile(r"(?:queueuserapc|postthreadmessage|postmessage|sendmessage|completionport|queuedcompletionstatus|dispatch_async|taskqueue|enqueue|dequeue|push|pop)", re.I)
-_ACQUIRE = re.compile(r"(?:entercriticalsection|acquire|lock(?!ed)|waitfor|pthread_(?:mutex|rwlock|spin)_lock|monitorenter)", re.I)
-_RELEASE = re.compile(r"(?:leavecriticalsection|release|unlock|setevent|pthread_(?:mutex|rwlock|spin)_unlock|monitorexit)", re.I)
+_QUEUE_API = re.compile(r"(?:queueuserapc|postthreadmessage(?:a|w)?|postmessage(?:a|w)?|sendmessage(?:a|w)?|createiocompletionport|(?:get|post)queuedcompletionstatus(?:ex)?|dispatch_async)", re.I)
+_ACQUIRE = re.compile(r"(?:entercriticalsection|acquiresrwlock|waitforsingleobject|waitformultipleobjects|pthread_(?:mutex|rwlock|spin)_lock|monitorenter)", re.I)
+_RELEASE = re.compile(r"(?:leavecriticalsection|releasesrwlock|releasemutex|releasesemaphore|setevent|pthread_(?:mutex|rwlock|spin)_unlock|monitorexit)", re.I)
 _MAX_GRAPH_FUNCTIONS = 5000
 _MAX_GRAPH_DEPTH = 16
 
@@ -95,11 +102,12 @@ def _nearby_resource(call_ea, limit=10):
 
 def _api_calls(pattern):
     for api_ea, api_name in idautils.Names():
-        if not pattern.search(api_name or ""):
+        normalized = normalize_api_name(api_name)
+        if not pattern.search(normalized):
             continue
         for xref in idautils.XrefsTo(api_ea, 0):
             if xref.type in (getattr(idaapi, "fl_CF", 16), getattr(idaapi, "fl_CN", 17)) and _func_start(xref.frm) != idaapi.BADADDR:
-                yield int(xref.frm), api_name
+                yield int(xref.frm), normalized
 
 
 def scan_thread_entries():
@@ -115,22 +123,34 @@ def scan_thread_entries():
     return rows, entries
 
 
-def scan_sync_and_queues():
+def scan_synchronization():
     rows, sync_by_function = [], {}
-    for category, pattern in (("Synchronization", _SYNC_API), ("Queue / message", _QUEUE_API)):
-        for call_ea, api_name in _api_calls(pattern):
-            resource, resource_ea, setup_ea = _nearby_resource(call_ea)
-            owner = _func_start(call_ea)
-            operation = "acquire" if _ACQUIRE.search(api_name) else "release/signal" if _RELEASE.search(api_name) else api_name
-            evidence = "call to %s" % api_name
-            if setup_ea != idaapi.BADADDR:
-                evidence += "; resource prepared at %s" % _hex(setup_ea)
-            item = _row(category, call_ea, operation, resource, resource_ea, evidence, "high-confidence" if resource else "resource unresolved", api_name)
-            rows.append(item)
-            sync_by_function.setdefault(owner, []).append(item)
+    for call_ea, api_name in _api_calls(_SYNC_API):
+        resource, resource_ea, setup_ea = _nearby_resource(call_ea)
+        owner = _func_start(call_ea)
+        operation = "acquire" if _ACQUIRE.search(api_name) else "release/signal" if _RELEASE.search(api_name) else api_name
+        evidence = "explicit synchronization API call to %s" % api_name
+        if setup_ea != idaapi.BADADDR:
+            evidence += "; resource prepared at %s" % _hex(setup_ea)
+        item = _row("Synchronization", call_ea, operation, resource, resource_ea, evidence, "high-confidence" if resource else "resource unresolved", api_name)
+        rows.append(item)
+        sync_by_function.setdefault(owner, []).append(item)
     for items in sync_by_function.values():
         items.sort(key=lambda item: item["site"])
     return rows, sync_by_function
+
+
+def scan_queue_activity():
+    rows = []
+    for call_ea, api_name in _api_calls(_QUEUE_API):
+        rows.append(_row("Queue / message", call_ea, api_name, evidence="explicit thread queue or message API call", risk="high-confidence"))
+    return rows
+
+
+def scan_sync_and_queues():
+    """Compatibility helper for scripts that still request the combined scan."""
+    sync_rows, sync_by_function = scan_synchronization()
+    return sync_rows + scan_queue_activity(), sync_by_function
 
 
 def _direct_internal_callees(func_ea):
@@ -224,18 +244,29 @@ def analyze_shared_state(thread_entries, sync_by_function):
     return rows
 
 
-def explore_threads_and_sync():
-    thread_rows, entries = scan_thread_entries()
-    sync_rows, sync_by_function = scan_sync_and_queues()
-    rows = thread_rows + sync_rows + analyze_lock_order(sync_by_function)
+def explore_threads():
+    thread_rows, _entries = scan_thread_entries()
+    return sorted(thread_rows + scan_queue_activity(), key=lambda item: (item["category"], item["site"], item["operation"]))
+
+
+def explore_synchronization():
+    _thread_rows, entries = scan_thread_entries()
+    sync_rows, sync_by_function = scan_synchronization()
+    rows = sync_rows + analyze_lock_order(sync_by_function)
     if entries and not ida_kernwin.user_cancelled():
         rows.extend(analyze_shared_state(entries, sync_by_function))
     return sorted(rows, key=lambda item: (item["category"], item["site"], item["operation"]))
 
 
+def explore_threads_and_sync():
+    """Backward-compatible aggregate used by external scripts."""
+    return sorted(explore_threads() + explore_synchronization(), key=lambda item: (item["category"], item["site"], item["operation"]))
+
+
 class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
-    def __init__(self):
+    def __init__(self, mode):
         super().__init__()
+        self.mode = mode
         self.rows = []
 
     def OnCreate(self, form):
@@ -244,7 +275,10 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
         root = QtWidgets.QVBoxLayout(self.parent)
         root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(10)
-        header = PageHeader("Thread and Synchronization Explorer", "Thread entries, locks, events, queues, shared state, and concurrency-risk candidates")
+        is_thread = self.mode == "thread"
+        title = "Thread Explorer" if is_thread else "Synchronization Explorer"
+        subtitle = "Thread creation, entry points, APCs, queues, and messages" if is_thread else "Explicit locks, waits, signals, shared state, and concurrency-risk candidates"
+        header = PageHeader(title, subtitle)
         refresh = QtWidgets.QPushButton("Refresh")
         refresh.setProperty("pnVariant", "primary")
         refresh.clicked.connect(self.refresh)
@@ -257,7 +291,7 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
         header.add_action(export)
         root.addWidget(header)
         self.filter_edit = QtWidgets.QLineEdit()
-        self.filter_edit.setPlaceholderText("Filter threads, locks, events, queues, globals, functions, or risk…")
+        self.filter_edit.setPlaceholderText("Filter thread entries, queues, messages, functions, or risk…" if is_thread else "Filter locks, waits, signals, globals, functions, or risk…")
         self.filter_edit.setClearButtonEnabled(True)
         self.filter_edit.textChanged.connect(self.apply_filter)
         root.addWidget(self.filter_edit)
@@ -275,7 +309,7 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
         self.table.itemDoubleClicked.connect(self.navigate_selected)
         table_card.add_widget(self.table)
         splitter.addWidget(table_card)
-        detail_card = Card("Concurrency evidence")
+        detail_card = Card("Thread evidence" if is_thread else "Synchronization evidence")
         self.details = QtWidgets.QTextBrowser()
         detail_card.add_widget(self.details)
         splitter.addWidget(detail_card)
@@ -287,25 +321,34 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
         QtCore.QTimer.singleShot(0, self.refresh)
 
     def refresh(self):
-        ida_kernwin.show_wait_box("Mapping threads, synchronization, and shared state…\nPress Cancel to stop safely.")
+        is_thread = self.mode == "thread"
+        activity = "Mapping thread activity…" if is_thread else "Mapping explicit synchronization and shared state…"
+        ida_kernwin.show_wait_box(activity + "\nPress Cancel to stop safely.")
         try:
-            self.rows = explore_threads_and_sync()
+            self.rows = explore_threads() if is_thread else explore_synchronization()
         except Exception as exc:
             self.rows = []
-            ida_kernwin.warning("Thread and Synchronization Explorer failed:\n%s" % exc)
+            ida_kernwin.warning(("Thread Explorer" if is_thread else "Synchronization Explorer") + " failed:\n%s" % exc)
         finally:
             ida_kernwin.hide_wait_box()
         self.populate()
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            values = [row["category"], _hex(row["site"]) if row["site"] else "—", row["function"], row["operation"], row["resource"], _hex(row["target"]) if row["target"] != idaapi.BADADDR else "—", row["risk"], row["evidence"]]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, row in enumerate(self.rows):
+                values = [row["category"], _hex(row["site"]) if row["site"] else "—", row["function"], row["operation"], row["resource"], _hex(row["target"]) if row["target"] != idaapi.BADADDR else "—", row["risk"], row["evidence"]]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(7, max(380, self.table.columnWidth(7)))
         self.table.setSortingEnabled(True)
@@ -324,6 +367,8 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None and 0 <= int(index) < len(self.rows) else None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for row in range(self.table.rowCount()):
             haystack = " ".join(self.table.item(row, column).text() for column in range(self.table.columnCount()) if self.table.item(row, column)).lower()
@@ -334,12 +379,13 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
     def show_details(self):
         row = self.selected_row()
         if not row:
-            self.details.setPlainText("Select a result to inspect its concurrency evidence.")
+            self.details.setPlainText("Select a result to inspect its %s evidence." % ("thread" if self.mode == "thread" else "synchronization"))
             return
+        caution = "Thread entry and queue targets are recovered from static call-site evidence; confirm indirect arguments manually." if self.mode == "thread" else "Race and deadlock findings are static candidates; confirm path feasibility and runtime scheduling."
         self.details.setPlainText(
-            "Category: %s\nSite: %s\nFunction: %s\nOperation: %s\nResource: %s\nTarget: %s %s\nRisk: %s\n\nEvidence: %s\n\nDetails:\n%s\n\nRace and deadlock findings are static candidates; confirm path feasibility and runtime scheduling." % (
+            "Category: %s\nSite: %s\nFunction: %s\nOperation: %s\nResource: %s\nTarget: %s %s\nRisk: %s\n\nEvidence: %s\n\nDetails:\n%s\n\n%s" % (
                 row["category"], _hex(row["site"]) if row["site"] else "N/A", row["function"], row["operation"], row["resource"],
-                _hex(row["target"]) if row["target"] != idaapi.BADADDR else "N/A", row["target_name"], row["risk"], row["evidence"], row["detail"],
+                _hex(row["target"]) if row["target"] != idaapi.BADADDR else "N/A", row["target_name"], row["risk"], row["evidence"], row["detail"], caution,
             )
         )
 
@@ -360,31 +406,34 @@ class ThreadSynchronizationExplorer(ida_kernwin.PluginForm):
         row = self.selected_row()
         if row:
             QtWidgets.QApplication.clipboard().setText(self._csv_text([row]))
-            self.status.setText("Copied selected concurrency finding")
+            self.status.setText("Copied selected %s finding" % ("thread" if self.mode == "thread" else "synchronization"))
 
     def export_csv(self):
-        path, _selected = QtWidgets.QFileDialog.getSaveFileName(self.parent, "Export Thread and Synchronization Results", "thread_synchronization.csv", "CSV files (*.csv)")
+        is_thread = self.mode == "thread"
+        title = "Export Thread Results" if is_thread else "Export Synchronization Results"
+        filename = "threads.csv" if is_thread else "synchronization.csv"
+        path, _selected = QtWidgets.QFileDialog.getSaveFileName(self.parent, title, filename, "CSV files (*.csv)")
         if path:
             with open(path, "w", encoding="utf-8-sig", newline="") as handle:
                 handle.write(self._csv_text(self.rows))
             self.status.setText("Exported %d findings to %s" % (len(self.rows), os.path.basename(path)))
 
     def OnClose(self, form):
-        global _explorer
-        if _explorer is self:
-            _explorer = None
+        global _thread_explorer, _synchronization_explorer
+        if _thread_explorer is self:
+            _thread_explorer = None
 
 
-def show_thread_synchronization_explorer():
-    global _explorer
-    if _explorer is None:
-        _explorer = ThreadSynchronizationExplorer()
-    _explorer.Show("PseudoNote - Thread and Synchronization Explorer", options=ida_kernwin.PluginForm.WOPN_PERSIST)
+def show_thread_explorer():
+    global _thread_explorer
+    if _thread_explorer is None:
+        _thread_explorer = ThreadSynchronizationExplorer("thread")
+    _thread_explorer.Show("PseudoNote - Thread Explorer", options=ida_kernwin.PluginForm.WOPN_PERSIST)
 
 
-class ThreadSynchronizationExplorerHandler(idaapi.action_handler_t):
+class ThreadExplorerHandler(idaapi.action_handler_t):
     def activate(self, ctx):
-        show_thread_synchronization_explorer()
+        show_thread_explorer()
         return 1
 
     def update(self, ctx):

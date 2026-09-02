@@ -35,7 +35,8 @@ class AntiAnalysisExplorerTests(unittest.TestCase):
     def test_dual_use_signals_are_weak_without_corroboration(self):
         self.assertIn('("Delay / sleep", _DELAY_API', SOURCE)
         self.assertIn('"single host-information API"', SOURCE)
-        self.assertIn('"timestamp source without a complete local timing-check chain"', SOURCE)
+        self.assertIn("A timestamp source by itself is normal application behavior", SOURCE)
+        self.assertNotIn('rows.append(_row("Timing source"', SOURCE)
         self.assertIn('row["score"] >= 60', SOURCE)
 
     def test_debug_information_classes_are_argument_correlated(self):

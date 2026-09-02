@@ -247,13 +247,20 @@ class RegexIDBSearch(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.results))
-        for row_index, result in enumerate(self.results):
-            values = [result["scope"], _hex(result["ea"]), result["function"], result["match"], result["excerpt"], result["detail"]]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.results)))
+        if not self.results:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, result in enumerate(self.results):
+                values = [result["scope"], _hex(result["ea"]), result["function"], result["match"], result["excerpt"], result["detail"]]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(4, max(460, self.table.columnWidth(4)))
         self.table.setSortingEnabled(True)

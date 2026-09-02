@@ -20,6 +20,18 @@ if not exist "%IDA_PLUGINS%\" (
     goto :failed
 )
 
+if not exist "%SOURCE_DIR%pseudonote_extended\" (
+    echo ERROR: Source package directory was not found:
+    echo        %SOURCE_DIR%pseudonote_extended
+    goto :failed
+)
+
+if not exist "%SOURCE_DIR%PseudoNoteExtended.py" (
+    echo ERROR: Source plugin entry point was not found:
+    echo        %SOURCE_DIR%PseudoNoteExtended.py
+    goto :failed
+)
+
 if not exist "%TARGET_PACKAGE%\" (
     mkdir "%TARGET_PACKAGE%" || goto :failed
 )
@@ -34,9 +46,15 @@ if exist "%IDA_PLUGINS%\pseudonote\" rmdir /S /Q "%IDA_PLUGINS%\pseudonote"
 if exist "%IDA_PLUGINS%\pseudonote.ini" del /F /Q "%IDA_PLUGINS%\pseudonote.ini"
 if exist "%USERPROFILE%\.pseudonote.ini" del /F /Q "%USERPROFILE%\.pseudonote.ini"
 
-rem Robocopy automatically copies only files that are new or differ in size/time.
-rem /E includes any future subdirectories; Python bytecode caches are excluded.
-robocopy "%SOURCE_DIR%pseudonote_extended" "%TARGET_PACKAGE%" /E /R:2 /W:1 /COPY:DAT /DCOPY:DAT /XD __pycache__ /XF *.pyc *.pyo
+rem Remove cached bytecode first so Python cannot import a feature whose source
+rem module was removed. This cleanup is restricted to the dedicated package.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$target = $env:TARGET_PACKAGE; Get-ChildItem -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.PSIsContainer -and $_.Name -eq '__pycache__' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Get-ChildItem -LiteralPath $target -Recurse -File -Include '*.pyc','*.pyo' -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue"
+if errorlevel 1 goto :failed
+
+rem /MIR copies new/changed files and purges destination files/directories that
+rem no longer exist in the current source tree.
+robocopy "%SOURCE_DIR%pseudonote_extended" "%TARGET_PACKAGE%" /MIR /R:2 /W:1 /COPY:DAT /DCOPY:DAT /XD __pycache__ /XF *.pyc *.pyo
 if errorlevel 8 goto :failed
 
 rem Keep IDA's root plugin entry point synchronized as well.

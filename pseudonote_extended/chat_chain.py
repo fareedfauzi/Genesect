@@ -5,6 +5,7 @@ Allows users to select specific functions from a call graph and chat about them.
 """
 
 import idaapi
+from pseudonote_extended.qt_compat import PluginFormWrapper
 import ida_kernwin
 import ida_nalt
 import ida_funcs
@@ -76,11 +77,11 @@ class ChatChainWorker(QThread):
         self.finished_signal.emit(graph)
 
 class ChatChainDialog(QtWidgets.QDialog):
-    def __init__(self, entry_ea=None):
-        super().__init__(None)
+    def __init__(self, entry_ea=None, parent=None):
+        super().__init__(parent)
         self.setWindowTitle("PseudoNote - Chat About a Function Chain")
         self.resize(1200, 800)
-        self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
         
         self.entry_ea = entry_ea or idc.get_screen_ea()
         self.graph = {}
@@ -142,6 +143,33 @@ class ChatChainDialog(QtWidgets.QDialog):
         self.entry_combo.activated.connect(self.on_entry_selected)
         self.entry_combo.lineEdit().returnPressed.connect(self.on_entry_search_submitted)
         entry_row.addWidget(self.entry_combo, 1)
+
+        self.entry_dropdown_btn = QtWidgets.QToolButton()
+        self.entry_dropdown_btn.setText("\u25be")
+        self.entry_dropdown_btn.setFixedSize(28, 28)
+        self.entry_dropdown_btn.setToolTip("Show all entry functions")
+        self.entry_dropdown_btn.setAccessibleName("Show entry function list")
+        self.entry_dropdown_btn.setStyleSheet(f"""
+            QToolButton {{
+                color: {colors['window_text']};
+                background: {colors['base']};
+                border: 1px solid {colors['mid']};
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 0;
+            }}
+            QToolButton:hover {{
+                color: white;
+                background: {colors['highlight']};
+                border-color: {colors['highlight']};
+            }}
+            QToolButton:pressed {{
+                background: {colors['highlight']};
+            }}
+        """)
+        self.entry_dropdown_btn.clicked.connect(self.entry_combo.showPopup)
+        entry_row.addWidget(self.entry_dropdown_btn)
         
         clear_btn = QPushButton("Clear History")
         clear_btn.setFlat(True)
@@ -773,9 +801,12 @@ class ChatChainHandler(idaapi.action_handler_t):
         if not f:
             print("No function selected.")
             return 1
-            
-        self.dlg = ChatChainDialog(f.start_ea)
-        self.dlg.show()
+
+        from pseudonote_extended.qt_compat import get_ida_main_window
+        self.dlg = ChatChainDialog(f.start_ea, parent=None)
+
+        self._wrapper = PluginFormWrapper(self.dlg, "PseudoNote - Ask AI Chain")
+        self._wrapper.show_form()
         return 1
         
     def update(self, ctx):

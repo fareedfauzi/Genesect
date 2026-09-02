@@ -192,13 +192,13 @@ class XrefTreeItem(QtWidgets.QTreeWidgetItem):
         dummy.setText(0, "Loading...")
 
 class XrefsDialog(QtWidgets.QDialog):
-    def __init__(self, target_ea):
+    def __init__(self, target_ea, parent=None):
         parent = QtWidgets.QApplication.activeWindow()
         super().__init__(parent)
         apply_mac_workspace(self)
         # Title will be set by reload_tree()
         self.resize(550, 600)
-        self.setWindowFlags(QtCore.Qt.Window)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
         
         self.target_ea = target_ea
         self.settings = QtCore.QSettings("PseudoNoteExtended", "XrefsDialog")
@@ -213,7 +213,6 @@ class XrefsDialog(QtWidgets.QDialog):
         
         self.filter_edit = QtWidgets.QLineEdit()
         self.filter_edit.setPlaceholderText("Filter functions (e.g. memset)...")
-        # Ensure older Qt compat, as setClearButtonEnabled is Qt5.2+
         if hasattr(self.filter_edit, 'setClearButtonEnabled'):
             self.filter_edit.setClearButtonEnabled(True)
         self.filter_edit.textChanged.connect(self.on_filter_changed)

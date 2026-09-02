@@ -83,6 +83,26 @@ class AgentRuntimeTests(unittest.TestCase):
         restored = runtime.AgentSession.from_json(session.to_json())
         self.assertEqual(restored.record_call("decompile", args), 2)
 
+    def test_function_completion_evidence_is_address_scoped(self):
+        session = runtime.AgentSession(0x401000, "entry")
+        session.record_observation("decompile", {"ea": "0x401000"}, "calls CreateFileW")
+        session.record_observation("decompile", {"ea": "0x402000"}, "calls InternetOpenUrlW")
+        self.assertTrue(session.evidence_supported_for_ea("0x401000", ["CreateFileW"]))
+        self.assertFalse(session.evidence_supported_for_ea("0x401000", ["InternetOpenUrlW"]))
+
+    def test_stale_function_cache_is_fully_invalidated(self):
+        session = runtime.AgentSession(0x401000, "entry")
+        args = {"ea": "0x401000"}
+        session.record_call("decompile", args)
+        session.record_observation("decompile", args, "return 1;")
+        session.record_result("decompile", args, "return 1;")
+        session.mark_examined(0x401000, "analyzed")
+        session.invalidate_function_cache("0x401000")
+        self.assertFalse(session.cached_result("decompile", args))
+        self.assertFalse(session.has_success("decompile", "0x401000"))
+        self.assertNotIn("0x401000", session.function_coverage)
+        self.assertEqual(session.record_call("decompile", args), 1)
+
     def test_prompt_translates_plain_language_change_requests_to_tools(self):
         prompt = runtime.build_system_prompt(0x401000, "entry", {"rename_func": "Rename function"})
         self.assertIn("Rename the function", prompt)

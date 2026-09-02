@@ -42,15 +42,22 @@ class MenuIconTests(unittest.TestCase):
         self.assertGreaterEqual(len(set(icons.ACTION_GLYPHS.values())), 35)
         self.assertEqual(len(icons.ACTION_GLYPHS), len(set(icons.ACTION_GLYPHS.values())))
 
-    def test_icons_use_clean_flat_high_dpi_vector_rendering(self):
+    def test_icons_use_minimalist_high_dpi_vector_rendering(self):
         rendered = icons._svg(icons.COLORS["analysis"], icons.GLYPHS["agent"], 23).decode("utf-8")
         self.assertIn('width="16" height="16"', rendered)
         self.assertIn('shape-rendering="geometricPrecision"', rendered)
-        self.assertIn('stroke-width="1.32"', rendered)
         self.assertIn('data-variant="23"', rendered)
-        self.assertNotIn('linearGradient', rendered)
-        self.assertNotIn('<circle', rendered)
+        self.assertIn('fill="#000000"', rendered)
         self.assertEqual(rendered.count('<path'), 1)
+
+    def test_every_non_brand_action_uses_minimalist_design(self):
+        for variant, (action, family) in enumerate(icons.ACTION_FAMILIES.items(), 1):
+            if icons._brand_svg(action):
+                continue
+            rendered = icons._svg(
+                icons.COLORS[family], icons.GLYPHS[icons.ACTION_GLYPHS[action]], variant
+            ).decode("utf-8")
+            self.assertIn('fill="#000000"', rendered, action)
 
     def test_registered_actions_request_their_specific_icons(self):
         plugin_source = (ROOT / "pseudonote_extended" / "plugin.py").read_text(encoding="utf-8-sig")

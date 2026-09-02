@@ -17,10 +17,10 @@ class ProposalReviewDialogTests(unittest.TestCase):
         self.assertIn('dialog_code = getattr(QtWidgets.QDialog, "DialogCode", None)', SOURCE)
         self.assertNotIn('getattr(QtWidgets.QDialog, "Accepted", QtWidgets.QDialog.DialogCode.Accepted)', SOURCE)
 
-    def test_pseudocode_reviews_use_a_safe_surface(self):
-        self.assertIn("def _open_safe_review_surface", SOURCE)
-        self.assertIn('open_disasm_window("PseudoNote Review Host")', SOURCE)
-        self.assertIn("_restore_review_surface(source, safe)", SOURCE)
+    def test_reviews_use_normal_qt_modal_execution(self):
+        self.assertNotIn("_open_safe_review_surface", SOURCE)
+        self.assertNotIn("open_disasm_window", SOURCE)
+        self.assertIn("return dialog.exec_() == _accepted_value()", SOURCE)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ from pseudonote_extended.qt_compat import (
     QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QGroupBox, QLineEdit, QPushButton, 
     QCheckBox, QSpinBox, QProgressBar, QSplitter, QTreeWidget, QTreeWidgetItem, 
     QHeaderView, QTabWidget, QTextEdit, QTextBrowser, QFont, QMessageBox, 
-    QTimer, QMenu, QApplication, QFrame, QWidget, QSettings, QComboBox
+    QTimer, QMenu, QApplication, QFrame, QWidget, QSettings, QComboBox,
 )
 import pseudonote_extended.ai_client as _ai_mod
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
@@ -4489,7 +4489,7 @@ class SortableTreeItem(QTreeWidgetItem):
 
 class DeepAnalyzerSettingsDialog(QDialog):
     def __init__(self, parent=None):
-        super(DeepAnalyzerSettingsDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setWindowTitle("Deep Analyzer Settings")
         self.resize(760, 620)
         apply_mac_workspace(self)
@@ -4752,12 +4752,10 @@ class DeepAnalyzerDialog(QDialog):
                 self._repolish(btn)
     
     def __init__(self, parent=None):
-        # Pass None as parent to make it a completely separate top-level window 
-        # that doesn't stay on top of IDA or minimize/restore with it.
-        super(DeepAnalyzerDialog, self).__init__(None)
+        super().__init__(parent)
         self.setWindowTitle("PseudoNote - Deep Analyzer with Report")
         self.resize(1200, 800)
-        self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
         
         
         # Instance state
@@ -4880,6 +4878,7 @@ class DeepAnalyzerDialog(QDialog):
         self.entry_selector = SearchableFunctionSelector(self)
         self.entry_selector.setFont(QFont("Consolas", 10))
         self.entry_selector.functionSelected.connect(self.on_entry_function_selected)
+        self.entry_dropdown_btn = self.entry_selector.create_dropdown_button(target_group)
 
         self.entry_change_btn = QPushButton("Load Current Function")
         self.entry_change_btn.setObjectName("primary")
@@ -4887,6 +4886,7 @@ class DeepAnalyzerDialog(QDialog):
 
         target_layout.addWidget(entry_lbl)
         target_layout.addWidget(self.entry_selector, 1)
+        target_layout.addWidget(self.entry_dropdown_btn)
         target_layout.addWidget(self.entry_change_btn)
 
         # Optional Features Column
@@ -4948,7 +4948,6 @@ class DeepAnalyzerDialog(QDialog):
         layout.addLayout(action_bar)
 
         self.batch_bar = BatchWorkbenchBar(self)
-        self.batch_bar.filterChanged.connect(lambda text: self.filter_edit.setText(text) if hasattr(self, 'filter_edit') else None)
         self.batch_bar.cancelRequested.connect(self.on_stop)
         self.batch_bar.retryRequested.connect(self.on_resume)
         self.batch_bar.pauseRequested.connect(lambda: self._set_workers_paused(True))
@@ -6120,7 +6119,14 @@ class DeepAnalyzerHandler(idaapi.action_handler_t):
         self.dlg = None
         
     def activate(self, ctx):
-        self.dlg = DeepAnalyzerDialog()
+        if self.dlg is not None:
+            self.dlg.showNormal()
+            self.dlg.show()
+            self.dlg.raise_()
+            self.dlg.activateWindow()
+            return 1
+
+        self.dlg = DeepAnalyzerDialog(parent=None)
         self.dlg.show()
         return 1
         

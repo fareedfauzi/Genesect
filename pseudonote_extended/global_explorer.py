@@ -211,17 +211,24 @@ class GlobalVariableExplorer(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            values = [
-                _hex(row["ea"]), row["name"], row["segment"], row["type"], str(row["size"]), row["initial"],
-                str(len(row["reads"])), str(len(row["writes"])), ", ".join(row["aliases"]),
-                ", ".join(row["functions"]),
-            ]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, row in enumerate(self.rows):
+                values = [
+                    _hex(row["ea"]), row["name"], row["segment"], row["type"], str(row["size"]), row["initial"],
+                    str(len(row["reads"])), str(len(row["writes"])), ", ".join(row["aliases"]),
+                    ", ".join(row["functions"]),
+                ]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(9, max(260, self.table.columnWidth(9)))
         self.table.setSortingEnabled(True)
@@ -238,6 +245,8 @@ class GlobalVariableExplorer(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None and 0 <= int(index) < len(self.rows) else None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for table_row in range(self.table.rowCount()):
             haystack = " ".join(self.table.item(table_row, col).text() for col in range(self.table.columnCount()) if self.table.item(table_row, col)).lower()

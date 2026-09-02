@@ -55,7 +55,7 @@ class AgenticUIWorkflowTests(unittest.TestCase):
         self.assertIn("self._remove_live_bubble()", SOURCE)
 
     def test_host_enforces_final_answer_after_bounded_tool_rounds(self):
-        self.assertIn("self._max_tool_rounds = 12", SOURCE)
+        self.assertIn("self._max_tool_rounds = max(24, (target_count * 9 + 3) // 4 + 32)", SOURCE)
         self.assertIn("self._max_tool_rounds = 1 if self._focused_request else 8", SOURCE)
         self.assertIn("if self._must_finalize:", SOURCE)
         self.assertIn("ignored the final-answer limit twice", SOURCE)

@@ -45,17 +45,12 @@ class PublicDocumentationTests(unittest.TestCase):
         required_utilities = (
             "Hex Viewer", "Indent Marks",
             "Global Variable Explorer", "Call Tree", "Virtual-Class Explorer",
-            "Callback and Dispatch Resolver", "Thread and Synchronization Explorer",
-            "Exception and Unwind Explorer", "Entry-Point Explorer",
-            "Structure Recovery Explorer", "Decompiler Quality Inspector",
-            "Anti-Analysis Explorer", "Process Injection Explorer",
-            "C2, Protocol and Packet Explorer", "Syscall and Kernel Interface Mapper",
-            "Dynamic API Resolution Explorer", "API Hash Explorer",
-            "Crypto and Encoding Explorer", "Configuration and IOC Extractor",
-            "String Decryption Workbench", "Regex Search Across IDB",
-            "Discover Strings with FLOSS", "Dump Selected Bytes",
-            "Comment Explorer", "Automatic Enum Recovery",
-            "Change History and Undo Explorer",
+            "Callback Explorer", "Thread Explorer", "Entry-Point Explorer",
+            "Find Crypt Explorer", "Anti-Analysis Explorer", "Process Injection Explorer",
+            "C2, Protocol and Packet Explorer", "API Sequence Explorer",
+            "API Classification Explorer", "Configuration and IOC Extractor",
+            "Regex Search Across IDB", "FLOSS Integration", "Dump Selected Bytes",
+            "Comment Explorer",
         )
         for title in required_utilities:
             self.assertIn(title, UTILITIES)

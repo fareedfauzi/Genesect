@@ -19,6 +19,7 @@ import idc
 from pseudonote_extended.qt_compat import QtCore, QtWidgets
 from pseudonote_extended.ui.components import PageHeader, Card
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
+from pseudonote_extended.api_knowledge import callback_parameters, normalize_api_name
 
 
 _resolver = None
@@ -27,10 +28,10 @@ _MAX_POINTER_ROWS = 100000
 _MAX_INDIRECT_ROWS = 100000
 _CALLBACK_API = re.compile(
     r"(?:setwindowshookex|registerclass|createdialog|dialogbox|enum(?:windows|childwindows|threadwindows|fonts|processes)|"
-    r"settimer|queueuserapc|createthread|beginthread|signal|atexit|qsort|bsearch|register.*callback|set.*handler|"
-    r"addvectoredexceptionhandler|setconsolectrlhandler|notify|subscribe)", re.I,
+    r"settimer|queueuserapc|createthread|beginthread|atexit|qsort|bsearch|register.*callback|set.*handler|"
+    r"addvectoredexceptionhandler|setconsolectrlhandler|(?:^|_)(?:signal|notify|subscribe)(?:_|$))", re.I,
 )
-_HANDLER_NAME = re.compile(r"(?:callback|handler|dispatch|wndproc|dialogproc|dlgproc|hookproc|threadproc|signal|visitor|listener|on_[a-z])", re.I)
+_HANDLER_NAME = re.compile(r"(?:wndproc|dialogproc|dlgproc|hookproc|threadproc|on_[a-z]|(?:^|_)(?:callback|handler|dispatch|signal|visitor|listener)(?:_|$))", re.I)
 
 
 def _hex(ea):
@@ -79,24 +80,66 @@ def _row(kind, site, target=idaapi.BADADDR, evidence="", confidence="high", deta
     }
 
 
-def scan_function_pointers():
-    rows, scanned = [], 0
+def scan_address_taken_functions():
+    rows = []
+    for func_ea in idautils.Functions():
+        for xref in idautils.DataRefsTo(func_ea):
+            if _is_executable_function(xref):
+                detail = idc.generate_disasm_line(xref, 0) or idc.GetDisasm(xref)
+                if detail:
+                    if detail.strip().startswith("push "):
+                        evidence = "Pushed function pointer"
+                    else:
+                        evidence = "Address-taken in code"
+                    rows.append(_row("Address-taken", xref, func_ea, evidence, "high", detail))
+            if len(rows) >= _MAX_POINTER_ROWS:
+                return rows
+        if ida_kernwin.user_cancelled():
+            break
+    return rows
+
+
+def scan_dispatch_tables():
+    rows = []
     ptr_size = _pointer_size()
     for seg_ea in idautils.Segments():
         segment = ida_segment.getseg(seg_ea)
         if not segment or (segment.perm & ida_segment.SEGPERM_EXEC):
             continue
         ea = (int(segment.start_ea) + ptr_size - 1) & ~(ptr_size - 1)
+        
+        current_table = []
+        
         while ea + ptr_size <= segment.end_ea:
-            if scanned >= _MAX_DATA_SCAN or len(rows) >= _MAX_POINTER_ROWS or ida_kernwin.user_cancelled():
+            if ida_kernwin.user_cancelled():
                 return rows
-            scanned += ptr_size
+                
             target = _read_pointer(ea)
             if _is_executable_function(target):
-                name = idc.get_name(ea) or ""
-                evidence = "named function pointer" if name else "aligned pointer in non-code segment"
-                rows.append(_row("Function pointer", ea, _function_start(target), evidence, "high" if name else "medium", name))
+                current_table.append((ea, target))
+            else:
+                if len(current_table) >= 3:
+                    table_start = current_table[0][0]
+                    for entry_ea, entry_target in current_table:
+                        rows.append(_row("Dispatch Table", entry_ea, entry_target, "Sequential dispatch table at %s" % _hex(table_start), "high", "Entry %d of %d" % (current_table.index((entry_ea, entry_target)) + 1, len(current_table))))
+                current_table = []
+                
             ea += ptr_size
+            
+        if len(current_table) >= 3:
+            table_start = current_table[0][0]
+            for entry_ea, entry_target in current_table:
+                rows.append(_row("Dispatch Table", entry_ea, entry_target, "Sequential dispatch table at %s" % _hex(table_start), "high", "Entry %d of %d" % (current_table.index((entry_ea, entry_target)) + 1, len(current_table))))
+                
+    return rows
+
+
+def scan_tls_callbacks():
+    rows = []
+    for func_ea in idautils.Functions():
+        name = idc.get_func_name(func_ea)
+        if name and name.lower().startswith("tlscallback_"):
+            rows.append(_row("TLS Callback", func_ea, func_ea, "IDA identified TLS Callback", "high", name))
     return rows
 
 
@@ -122,17 +165,32 @@ def _nearby_function_constants(call_ea, max_instructions=12):
 def scan_callback_registrations():
     rows = []
     for api_ea, api_name in idautils.Names():
-        if not _CALLBACK_API.search(api_name or ""):
+        normalized = normalize_api_name(api_name)
+        if not _CALLBACK_API.search(normalized):
             continue
+        callback_params = callback_parameters(normalized)
+        generic_name_match = bool(re.search(r"(?:register.*callback|set.*handler|notify|subscribe)", normalized, re.I))
+        # Generic callback-ish symbol names are a major source of false
+        # positives. Require API metadata to confirm a callback parameter.
+        if generic_name_match and not callback_params:
+            continue
+        semantic_detail = ""
+        if callback_params:
+            semantic_detail = "callback parameter(s): " + ", ".join(
+                "%d:%s (%s)" % (param["index"], param["name"] or "unnamed", param["type"] or "unknown")
+                for param in callback_params
+            )
         for xref in idautils.XrefsTo(api_ea, 0):
             if xref.type not in (getattr(idaapi, "fl_CF", 16), getattr(idaapi, "fl_CN", 17)):
                 continue
             candidates = _nearby_function_constants(xref.frm)
             if candidates:
                 for target, setup_ea in candidates.items():
-                    rows.append(_row("Callback registration", xref.frm, target, "function address prepared before %s" % api_name, "medium", "setup at %s" % _hex(setup_ea)))
+                    confidence = "high" if callback_params else "medium"
+                    detail = "; ".join(value for value in ("setup at %s" % _hex(setup_ea), semantic_detail) if value)
+                    rows.append(_row("Callback registration", xref.frm, target, "function address prepared before %s" % normalized, confidence, detail))
             else:
-                rows.append(_row("Callback registration", xref.frm, evidence="call to %s; callback argument unresolved" % api_name, confidence="low"))
+                rows.append(_row("Callback registration", xref.frm, evidence="call to %s; callback argument unresolved" % normalized, confidence="low", detail=semantic_detail))
     return rows
 
 
@@ -191,14 +249,9 @@ def scan_indirect_calls():
             if ida_ua.decode_insn(insn, ea) <= 0 or not (insn.get_canon_feature() & getattr(idaapi, "CF_CALL", 0x10)):
                 continue
             op = insn.ops[0]
-            if op.type in (getattr(ida_ua, "o_near", 7), getattr(ida_ua, "o_far", 6)):
+            if op.type not in (getattr(ida_ua, "o_reg", 1), getattr(ida_ua, "o_phrase", 3), getattr(ida_ua, "o_displ", 4)):
                 continue
             target = idaapi.BADADDR
-            if op.type == getattr(ida_ua, "o_mem", 2):
-                pointer_ea = int(op.addr)
-                pointed = _read_pointer(pointer_ea)
-                if _is_executable_function(pointed):
-                    target = _function_start(pointed)
             detail = idc.generate_disasm_line(ea, 0) or idc.GetDisasm(ea)
             rows.append(_row("Indirect call", ea, target, "decoded call through register/memory operand", "high" if target != idaapi.BADADDR else "unresolved", detail))
             if len(rows) >= _MAX_INDIRECT_ROWS:
@@ -210,7 +263,7 @@ def scan_indirect_calls():
 
 def resolve_callbacks_and_dispatch():
     rows = []
-    for scanner in (scan_callback_registrations, scan_named_handlers, scan_switches, scan_indirect_calls, scan_function_pointers):
+    for scanner in (scan_indirect_calls, scan_address_taken_functions, scan_dispatch_tables, scan_tls_callbacks):
         rows.extend(scanner())
         if ida_kernwin.user_cancelled():
             break
@@ -232,7 +285,7 @@ class CallbackDispatchResolver(ida_kernwin.PluginForm):
         root = QtWidgets.QVBoxLayout(self.parent)
         root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(10)
-        header = PageHeader("Callback and Dispatch Resolver", "Function pointers, registrations, handlers, jump tables, and indirect-call targets")
+        header = PageHeader("Indirect Call Explorer", "Dynamic indirect calls, function pointers, TLS callbacks, and dispatch tables")
         refresh = QtWidgets.QPushButton("Refresh")
         refresh.setProperty("pnVariant", "primary")
         refresh.clicked.connect(self.refresh)
@@ -280,20 +333,27 @@ class CallbackDispatchResolver(ida_kernwin.PluginForm):
             self.rows = resolve_callbacks_and_dispatch()
         except Exception as exc:
             self.rows = []
-            ida_kernwin.warning("Callback and Dispatch Resolver failed:\n%s" % exc)
+            ida_kernwin.warning("Callback Explorer failed:\n%s" % exc)
         finally:
             ida_kernwin.hide_wait_box()
         self.populate()
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            values = [row["kind"], _hex(row["site"]), _hex(row["target"]) if row["target"] != idaapi.BADADDR else "Unresolved", row["target_name"], row["owner"], row["confidence"], row["evidence"]]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem("No results found.")
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, 7)
+        else:
+            for row_index, row in enumerate(self.rows):
+                values = [row["kind"], _hex(row["site"]), _hex(row["target"]) if row["target"] != idaapi.BADADDR else "Unresolved", row["target_name"], row["owner"], row["confidence"], row["evidence"]]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(6, max(340, self.table.columnWidth(6)))
         self.table.setSortingEnabled(True)
@@ -312,6 +372,8 @@ class CallbackDispatchResolver(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None and 0 <= int(index) < len(self.rows) else None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for row in range(self.table.rowCount()):
             haystack = " ".join(self.table.item(row, col).text() for col in range(self.table.columnCount()) if self.table.item(row, col)).lower()
@@ -352,7 +414,7 @@ class CallbackDispatchResolver(ida_kernwin.PluginForm):
             self.status.setText("Copied selected resolution")
 
     def export_csv(self):
-        path, _selected = QtWidgets.QFileDialog.getSaveFileName(self.parent, "Export Callback and Dispatch Results", "callback_dispatch.csv", "CSV files (*.csv)")
+        path, _selected = QtWidgets.QFileDialog.getSaveFileName(self.parent, "Export Callback Results", "callbacks.csv", "CSV files (*.csv)")
         if path:
             with open(path, "w", encoding="utf-8-sig", newline="") as handle:
                 handle.write(self._csv_text(self.rows))
@@ -368,7 +430,7 @@ def show_callback_dispatch_resolver():
     global _resolver
     if _resolver is None:
         _resolver = CallbackDispatchResolver()
-    _resolver.Show("PseudoNote - Callback and Dispatch Resolver", options=ida_kernwin.PluginForm.WOPN_PERSIST)
+    _resolver.Show("PseudoNote - Callback Explorer", options=ida_kernwin.PluginForm.WOPN_PERSIST)
 
 
 class CallbackDispatchResolverHandler(idaapi.action_handler_t):

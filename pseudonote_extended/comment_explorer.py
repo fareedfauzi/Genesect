@@ -202,13 +202,20 @@ class CommentExplorer(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            values = [row["scope"], row["kind"], _hex(row["ea"]), row["function"], row["text"].replace("\n", " "), str(len(row["text"]))]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, row in enumerate(self.rows):
+                values = [row["scope"], row["kind"], _hex(row["ea"]), row["function"], row["text"].replace("\n", " "), str(len(row["text"]))]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(4, max(420, self.table.columnWidth(4)))
         self.table.setSortingEnabled(True)
@@ -226,6 +233,8 @@ class CommentExplorer(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None else None
 
     def apply_filter(self, *_args):
+        if not getattr(self, 'rows', None):
+            return
         needle = self.filter_edit.text().strip().lower()
         scope = self.scope_combo.currentText()
         for table_row in range(self.table.rowCount()):

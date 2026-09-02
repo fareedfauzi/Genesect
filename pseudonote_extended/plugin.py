@@ -16,6 +16,14 @@ from pseudonote_extended.highlight import (
     toggle_disasm_highlight_handler,
 )
 from pseudonote_extended.indent import create_indent_guide_hooks, destroy_indent_guide_hooks, ToggleIndentGuidesHandler
+from pseudonote_extended.pseudocode_folding import (
+    create_pseudocode_folding_hooks, destroy_pseudocode_folding_hooks,
+    TogglePseudocodeBlockHandler,
+)
+from pseudonote_extended.argument_hints import (
+    create_argument_name_hint_hooks, destroy_argument_name_hint_hooks,
+    ToggleArgumentNameHintsHandler,
+)
 from pseudonote_extended.default_visuals import create_default_visual_hooks, destroy_default_visual_hooks
 from pseudonote_extended.zoom import (
     ToggleZoomAllViewsHandler, initialize_zoom_all_views, shutdown_zoom_all_views,
@@ -45,6 +53,7 @@ from pseudonote_extended.handlers import (
     DumpBytesHandler,
     CopyFunctionTreeHandler,
     CopyGlobalXrefTreeHandler,
+    DecryptionWorkbenchHandler,
 )
 from pseudonote_extended.deep_analyzer import DeepAnalyzerHandler
 from pseudonote_extended.summarizer import SummarizerHandler
@@ -53,24 +62,20 @@ from pseudonote_extended.hexview import OpenHexViewHandler
 from pseudonote_extended.vftable import VftableListHandler
 from pseudonote_extended.global_explorer import GlobalVariableExplorerHandler
 from pseudonote_extended.virtual_class_explorer import VirtualClassExplorerHandler
+from pseudonote_extended.com_explorer import COMExplorerHandler
 from pseudonote_extended.callback_resolver import CallbackDispatchResolverHandler
-from pseudonote_extended.thread_sync_explorer import ThreadSynchronizationExplorerHandler
-from pseudonote_extended.exception_unwind_explorer import ExceptionUnwindExplorerHandler
-from pseudonote_extended.syscall_kernel_mapper import SyscallKernelInterfaceMapperHandler
+from pseudonote_extended.callback_shellcode_explorer import CallbackShellcodeExplorerHandler
+from pseudonote_extended.call_ranking_explorer import CallRankingExplorerHandler
+from pseudonote_extended.thread_sync_explorer import ThreadExplorerHandler
 from pseudonote_extended.entry_point_explorer import EntryPointExplorerHandler
 from pseudonote_extended.regex_idb_search import RegexIDBSearchHandler
-from pseudonote_extended.change_history import ChangeHistoryExplorerHandler, start_change_history_hooks, stop_change_history_hooks
-from pseudonote_extended.crypto_encoding_explorer import CryptoEncodingExplorerHandler
 from pseudonote_extended.protocol_packet_explorer import ProtocolPacketExplorerHandler
 from pseudonote_extended.process_injection_explorer import ProcessInjectionExplorerHandler
 from pseudonote_extended.config_ioc_extractor import ConfigurationIOCExtractorHandler
-from pseudonote_extended.string_decryption_workbench import StringDecryptionWorkbenchHandler
-from pseudonote_extended.structure_recovery_explorer import StructureRecoveryExplorerHandler
 from pseudonote_extended.anti_analysis_explorer import AntiAnalysisExplorerHandler
-from pseudonote_extended.dynamic_api_resolution_explorer import DynamicAPIResolutionExplorerHandler
-from pseudonote_extended.decompiler_quality_inspector import DecompilerQualityInspectorHandler
-from pseudonote_extended.api_hash_explorer import APIHashExplorerHandler
-from pseudonote_extended.auto_enum_explorer import AutoEnumExplorerHandler
+from pseudonote_extended.findcrypt_explorer import FindCryptExplorerHandler
+from pseudonote_extended.api_sequence_explorer import APISequenceExplorerHandler
+from pseudonote_extended.evidence_graph import EvidenceGraphHandler
 from pseudonote_extended.comment_explorer import CommentExplorerHandler
 from pseudonote_extended.agentic_analyzer import AgenticAnalysisHandler
 from pseudonote_extended.metadata import PLUGIN_DISPLAY_NAME, __version__
@@ -118,6 +123,8 @@ class PseudoNotePlugin(idaapi.plugin_t):
         self.ctx_hooks = None
         self.highlight_hooks = None
         self.indent_guide_hooks = None
+        self.pseudocode_folding_hooks = None
+        self.argument_hint_hooks = None
         self.default_visual_hooks = None
 
     def init(self):
@@ -127,7 +134,6 @@ class PseudoNotePlugin(idaapi.plugin_t):
         vm = _get_view_module()
         vm.plugin_instance = self
         ensure_storage_schema()
-        self.change_history_hooks = start_change_history_hooks()
         self.menu_icons = load_menu_icons()
         icon = lambda name, fallback: self.menu_icons.get(name, fallback)
 
@@ -154,6 +160,20 @@ class PseudoNotePlugin(idaapi.plugin_t):
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:toggle_pseudocode_block", "Interactive Code Blocks",
+            TogglePseudocodeBlockHandler(), "",
+            "Single-click a brace to highlight its block; double-click to collapse or expand it",
+            icon("toggle_pseudocode_block", 48)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:argument_name_hints", "Display function argument names",
+            ToggleArgumentNameHintsHandler(), "",
+            "Toggle parameter-name inlay hints in Hex-Rays function calls",
+            icon("argument_name_hints", 48), getattr(idaapi, "ADF_CHECKABLE", 0)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:bookmarks_empty", "No bookmarks configured",
             EmptyBookmarksHandler(), "",
             "Choose bookmarked features in PseudoNote Settings", icon("bookmarks_empty", 48)
@@ -170,6 +190,8 @@ class PseudoNotePlugin(idaapi.plugin_t):
         if ida_hexrays.init_hexrays_plugin():
             self.highlight_hooks = _create_highlight_hooks()
             self.indent_guide_hooks = create_indent_guide_hooks()
+            self.pseudocode_folding_hooks = create_pseudocode_folding_hooks()
+            self.argument_hint_hooks = create_argument_name_hint_hooks()
         else:
             print("[PseudoNote] Hex-Rays not available at init time, hooks will be installed on first enable")
             self.highlight_hooks = None
@@ -521,7 +543,7 @@ class PseudoNotePlugin(idaapi.plugin_t):
         # Vftable method browser
         idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:vftable_list",
-            "Browse Virtual Tables",
+            "VTable Explorer",
             VftableListHandler(),
             "",
             "Scan vftables and browse their functions, callers, and users",
@@ -567,40 +589,53 @@ class PseudoNotePlugin(idaapi.plugin_t):
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:com_explorer",
+            "COM Explorer",
+            COMExplorerHandler(),
+            "",
+            "Track COM GUID references and infer Hex-Rays interface types",
+            icon("com_explorer", 73)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:callback_dispatch_resolver",
-            "Callback and Dispatch Resolver",
+            "Indirect Call Explorer",
             CallbackDispatchResolverHandler(),
             "",
-            "Identify function pointers, callback registrations, handlers, jump tables, and indirect-call targets",
+            "Identify dynamic indirect calls, function pointers, and dispatch tables",
             icon("callback_dispatch_resolver", 73)
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:thread_sync_explorer",
-            "Thread and Synchronization Explorer",
-            ThreadSynchronizationExplorerHandler(),
+            "pseudonote_extended:callback_shellcode_explorer",
+            "Callback Shellcode APIs",
+            CallbackShellcodeExplorerHandler(),
             "",
-            "Map thread entries, locks, events, queues, shared state, and possible races or deadlocks",
-            icon("thread_sync_explorer", 73)
+            "Identify APIs commonly abused for executing shellcode via callbacks",
+            icon("inspect", 73)
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:exception_unwind_explorer",
-            "Exception and Unwind Explorer",
-            ExceptionUnwindExplorerHandler(),
+            "pseudonote_extended:call_ranking_explorer",
+            "Call Centrality Explorer",
+            CallRankingExplorerHandler(),
             "",
-            "Visualize exception handlers, SEH chains, cleanup paths, landing pads, and compiler unwind behavior",
-            icon("exception_unwind_explorer", 73)
+            "Rank functions by incoming and outgoing calls to identify key utilities and dispatchers",
+            icon("inspect", 73)
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:syscall_kernel_mapper",
-            "Syscall and Kernel Interface Mapper",
-            SyscallKernelInterfaceMapperHandler(),
+            "pseudonote_extended:thread_explorer",
+            "Thread Explorer",
+            ThreadExplorerHandler(),
             "",
-            "Identify direct syscalls, IOCTLs, devices, kernel callbacks, and user/kernel trust boundaries",
-            icon("syscall_kernel_mapper", 73)
+            "Map thread creation, entry points, APCs, queues, and message activity",
+            icon("thread_explorer", 73)
         ))
+
+
+
+
 
         idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:entry_point_explorer",
@@ -620,23 +655,6 @@ class PseudoNotePlugin(idaapi.plugin_t):
             icon("regex_idb_search", 73)
         ))
 
-        idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:change_history_explorer",
-            "Change History and Undo Explorer",
-            ChangeHistoryExplorerHandler(),
-            "",
-            "Display journaled IDB modifications with before/after values and verified selective rollback",
-            icon("change_history_explorer", 73)
-        ))
-
-        idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:auto_enum_explorer",
-            "Automatic Enum Recovery",
-            AutoEnumExplorerHandler(),
-            "",
-            "Detect standard API enum arguments and selectively apply reviewed enum types",
-            icon("auto_enum_explorer", 73)
-        ))
 
         idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:comment_explorer",
@@ -647,14 +665,6 @@ class PseudoNotePlugin(idaapi.plugin_t):
             icon("comment_explorer", 73)
         ))
 
-        idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:crypto_encoding_explorer",
-            "Crypto and Encoding Explorer",
-            CryptoEncodingExplorerHandler(),
-            "",
-            "Detect cryptographic constants, algorithms, XOR loops, hashing, Base64, compression, and custom decoders",
-            icon("crypto_encoding_explorer", 73)
-        ))
 
         idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:protocol_packet_explorer",
@@ -684,24 +694,6 @@ class PseudoNotePlugin(idaapi.plugin_t):
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:string_decryption_workbench",
-            "String Decryption Workbench",
-            StringDecryptionWorkbenchHandler(),
-            "",
-            "Detect decoder functions, safely preview decoded strings, and annotate references",
-            icon("string_decryption_workbench", 73)
-        ))
-
-        idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:structure_recovery_explorer",
-            "Structure Recovery Explorer",
-            StructureRecoveryExplorerHandler(),
-            "",
-            "Cluster pointer offsets, infer fields and nested structures, compare layouts, and import reviewed types",
-            icon("structure_recovery_explorer", 73)
-        ))
-
-        idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:anti_analysis_explorer",
             "Anti-Analysis Explorer",
             AntiAnalysisExplorerHandler(),
@@ -711,30 +703,33 @@ class PseudoNotePlugin(idaapi.plugin_t):
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:dynamic_api_resolution_explorer",
-            "Dynamic API Resolution Explorer",
-            DynamicAPIResolutionExplorerHandler(),
+            "pseudonote_extended:findcrypt_explorer",
+            "Find Crypt Explorer",
+            FindCryptExplorerHandler(),
             "",
-            "Recover APIs resolved through runtime resolvers, hashes, export walking, syscall tables, and custom loaders",
-            icon("dynamic_api_resolution_explorer", 73)
+            "Detect crypto, hash, compression, and encoding constants and API usage",
+            icon("findcrypt_explorer", 73)
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:decompiler_quality_inspector",
-            "Decompiler Quality Inspector",
-            DecompilerQualityInspectorHandler(),
+            "pseudonote_extended:decryption_workbench",
+            "Decryption Workbench",
+            DecryptionWorkbenchHandler("pseudonote_extended:decryption_workbench"),
             "",
-            "Find failed decompilations, bad prototypes, stack inconsistencies, suspicious casts, unresolved calls, and variables needing types",
-            icon("decompiler_quality_inspector", 73)
+            "Analyze and decrypt selected strings, data, or constants",
+            icon("decryption_workbench", 73)
         ))
 
+
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:api_hash_explorer",
-            "API Hash Explorer",
-            APIHashExplorerHandler(),
-            "",
-            "Resolve API hash constants using common algorithms and the bundled apilist.txt corpus",
-            icon("api_hash_explorer", 73)
+            "pseudonote_extended:api_sequence_explorer", "API Sequence Explorer",
+            APISequenceExplorerHandler(), "", "Correlate ordered API behaviors and suppress isolated dual-use calls",
+            icon("api_sequence_explorer", 73)
+        ))
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:evidence_graph", "API Classification Explorer",
+            EvidenceGraphHandler(), "", "Classify and correlate API calls to identify malware behaviors and explore evidence",
+            icon("evidence_graph", 73)
         ))
 
         self.ctx_hooks = vm.ContextMenuHooks()
@@ -746,14 +741,16 @@ class PseudoNotePlugin(idaapi.plugin_t):
         self.open_code_view()
 
     def term(self):
-        stop_change_history_hooks()
-        self.change_history_hooks = None
         destroy_default_visual_hooks()
         self.default_visual_hooks = None
         destroy_highlight_hooks()
         self.highlight_hooks = None
         destroy_indent_guide_hooks()
         self.indent_guide_hooks = None
+        destroy_pseudocode_folding_hooks()
+        self.pseudocode_folding_hooks = None
+        destroy_argument_name_hint_hooks()
+        self.argument_hint_hooks = None
         shutdown_zoom_all_views()
         if self.ctx_hooks:
             self.ctx_hooks.unhook()
@@ -774,6 +771,8 @@ class PseudoNotePlugin(idaapi.plugin_t):
             "pseudonote_extended:bulk_var_rename",
             "pseudonote_extended:toggle_highlight", "pseudonote_extended:toggle_disasm_highlight",
             "pseudonote_extended:toggle_indent_guides",
+            "pseudonote_extended:toggle_pseudocode_block",
+            "pseudonote_extended:argument_name_hints",
             "pseudonote_extended:bookmarks_empty",
             "pseudonote_extended:zoom_all_views",
             "pseudonote_extended:ask_chat", "pseudonote_extended:ask_chat_chain", "pseudonote_extended:agentic_analysis", "pseudonote_extended:deep_analyzer", "pseudonote_extended:summarizer", "pseudonote_extended:floss_strings",
@@ -791,24 +790,19 @@ class PseudoNotePlugin(idaapi.plugin_t):
             "pseudonote_extended:copy_global_xref_tree",
             "pseudonote_extended:global_variable_explorer",
             "pseudonote_extended:virtual_class_explorer",
+            "pseudonote_extended:com_explorer",
             "pseudonote_extended:callback_dispatch_resolver",
-            "pseudonote_extended:thread_sync_explorer",
-            "pseudonote_extended:exception_unwind_explorer",
-            "pseudonote_extended:syscall_kernel_mapper",
+            "pseudonote_extended:thread_explorer",
             "pseudonote_extended:entry_point_explorer",
             "pseudonote_extended:regex_idb_search",
-            "pseudonote_extended:change_history_explorer",
-            "pseudonote_extended:crypto_encoding_explorer",
             "pseudonote_extended:protocol_packet_explorer",
             "pseudonote_extended:process_injection_explorer",
             "pseudonote_extended:config_ioc_extractor",
-            "pseudonote_extended:string_decryption_workbench",
-            "pseudonote_extended:structure_recovery_explorer",
             "pseudonote_extended:anti_analysis_explorer",
-            "pseudonote_extended:dynamic_api_resolution_explorer",
-            "pseudonote_extended:decompiler_quality_inspector",
-            "pseudonote_extended:api_hash_explorer",
-            "pseudonote_extended:auto_enum_explorer",
+            "pseudonote_extended:findcrypt_explorer",
+            "pseudonote_extended:api_sequence_explorer",
+            "pseudonote_extended:evidence_graph",
+            "pseudonote_extended:decryption_workbench",
             "pseudonote_extended:comment_explorer",
         ]:
             idaapi.unregister_action(action_id)

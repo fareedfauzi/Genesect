@@ -1,38 +1,22 @@
 import pathlib
 import unittest
 
-
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).parents[1]
 CHAT = (ROOT / "pseudonote_extended" / "chat.py").read_text(encoding="utf-8")
-RUNTIME = (ROOT / "pseudonote_extended" / "chat_tool_runtime.py").read_text(encoding="utf-8")
 
+class PlainChatActionTests(unittest.TestCase):
+    def test_model_cannot_autonomously_mutate_ida(self):
+        for token in ("Enable IDA changes", "_confirm_chat_tool", "execute_chat_tool"):
+            self.assertNotIn(token, CHAT)
 
-class ChatActionReliabilityTests(unittest.TestCase):
-    def test_chat_exposes_reviewed_ida_change_control(self):
-        self.assertIn('QCheckBox("Enable IDA changes")', CHAT)
-        self.assertIn("self.allow_changes_cb.setChecked(True)", CHAT)
-        self.assertIn("self.tool_policy.allow_mutations = self.allow_changes_cb.isChecked()", CHAT)
+    def test_manual_mutating_shortcuts_require_confirmation(self):
+        self.assertIn("CONFIRM_SIDEBAR_SHORTCUTS", CHAT)
+        self.assertIn('"Confirm PseudoNote Shortcut"', CHAT)
+        self.assertIn("QMessageBox.question", CHAT)
 
-    def test_cancelled_change_stops_instead_of_retrying(self):
-        self.assertIn("change_cancelled = False", CHAT)
-        self.assertIn("changes_disabled = False", CHAT)
-        self.assertIn("IDA change cancelled. Nothing was modified.", CHAT)
-        self.assertIn("IDA changes are disabled.", CHAT)
-        self.assertIn("self.input_box.setEnabled(True)", CHAT)
-
-    def test_identical_tool_calls_are_suppressed_per_request(self):
-        self.assertIn("self._chat_tool_signatures = set()", CHAT)
-        self.assertIn("Identical tool call already attempted", CHAT)
-
-    def test_function_tools_fall_back_to_current_chat_function(self):
-        self.assertIn('"stack_layout",', RUNTIME)
-        self.assertIn("func = ida_funcs.get_func(int(address))", RUNTIME)
-        self.assertIn('args["ea"] = int(func.start_ea)', RUNTIME)
-
-    def test_confirmation_dialog_has_explicit_actions(self):
-        self.assertIn('dialog.addButton("Apply Change"', CHAT)
-        self.assertIn('dialog.addButton("Cancel"', CHAT)
-
+    def test_chat_still_supports_request_cancellation(self):
+        self.assertIn("def stop_request(self):", CHAT)
+        self.assertIn("client.cancel_request(request_id)", CHAT)
 
 if __name__ == "__main__":
     unittest.main()

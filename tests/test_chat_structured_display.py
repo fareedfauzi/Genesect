@@ -8,10 +8,9 @@ AGENT = (ROOT / "pseudonote_extended" / "agentic_analyzer.py").read_text(encodin
 
 
 class ChatStructuredDisplayTests(unittest.TestCase):
-    def test_stack_layout_is_rendered_as_a_list(self):
-        self.assertIn('if tool_name == "stack_layout"', CHAT)
-        self.assertIn("for row in rows:", CHAT)
-        self.assertIn("unknown storage", CHAT)
+    def test_structured_tool_formatting_remains_in_autonomous_analyzer_only(self):
+        self.assertNotIn('if tool_name == "stack_layout"', CHAT)
+        self.assertNotIn('if tool_name == "basic_blocks"', CHAT)
         self.assertIn("readable_location(variable, argument, result)", AGENT)
         self.assertIn("return-value storage", AGENT)
         self.assertIn("Swig Object", AGENT)
@@ -20,8 +19,7 @@ class ChatStructuredDisplayTests(unittest.TestCase):
         self.assertIn("int(func.start_ea) <= int(block.start_ea) < int(func.end_ea)", AGENT)
         self.assertIn("primary_ids = {int(block.id) for block in blocks}", AGENT)
         self.assertIn("sorted({int(item.id) for item in block.succs()} & primary_ids)", AGENT)
-        self.assertIn('if tool_name == "basic_blocks"', CHAT)
-        self.assertIn("control-flow structure: branches, merges, loops, and exits", CHAT)
+        self.assertNotIn('if tool_name == "basic_blocks"', CHAT)
 
 
 if __name__ == "__main__":

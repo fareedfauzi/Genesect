@@ -34,7 +34,6 @@ from pseudonote_extended.actions.validation import (
 )
 from pseudonote_extended.ui.proposals import confirm_change, select_mapping
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
-from pseudonote_extended.ui.modal_safety import exec_modal
 from pseudonote_extended.utility_state import (
     validate_byte_range, normalize_external_text, external_text_limit,
     build_external_text_url,
@@ -258,9 +257,7 @@ class RenameVariablesHandler(idaapi.action_handler_t):
 # ---------------------------------------------------------------------------
 class CallerSelectionDialog(QtWidgets.QDialog):
     def __init__(self, callers_info, parent=None):
-        # Keep this small modal native. The large workspace stylesheet causes
-        # broken checkbox/button painting in IDA's Windows Qt host.
-        super(CallerSelectionDialog, self).__init__(None)
+        super().__init__(parent)
         self.setWindowTitle("Select Callers for Context")
         self.resize(400, 300)
         self.setModal(True)
@@ -307,12 +304,10 @@ class CallerSelectionDialog(QtWidgets.QDialog):
         layout.addWidget(scroll)
         
         btn_box = QtWidgets.QDialogButtonBox()
-        self.ok_button = btn_box.addButton("OK", QtWidgets.QDialogButtonBox.AcceptRole)
-        self.cancel_button = btn_box.addButton("Cancel", QtWidgets.QDialogButtonBox.RejectRole)
-        self.ok_button.setDefault(True)
-        self.ok_button.setAutoDefault(True)
-        self.ok_button.clicked.connect(self.accept)
-        self.cancel_button.clicked.connect(self.reject)
+        btn_box.addButton(QtWidgets.QDialogButtonBox.Ok)
+        btn_box.addButton(QtWidgets.QDialogButtonBox.Cancel)
+        btn_box.accepted.connect(self.accept)
+        btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
 
     def get_selected(self):
@@ -344,7 +339,7 @@ def _get_caller_context_texts(target_func_ea):
     selected_callers = []
     if callers_info:
         dialog = CallerSelectionDialog(callers_info)
-        if exec_modal(dialog, "PseudoNote Caller Context Host", target_func_ea) == QtWidgets.QDialog.Accepted:
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
             selected_callers = dialog.get_selected()
         else:
             return None # Cancelled by user
@@ -1283,7 +1278,7 @@ class DeleteAsmCommentsHandler(idaapi.action_handler_t):
 # ---------------------------------------------------------------------------
 class StructAnalysisDialog(QtWidgets.QDialog):
     def __init__(self, target_name, target_code, vdui, lvar_name, on_apply_callback=None, parent=None):
-        super(StructAnalysisDialog, self).__init__(parent)
+        super().__init__(parent)
         apply_mac_workspace(self)
         self.setWindowTitle(f"Struct Creator / Editor: {target_name}")
         self.resize(700, 600)
@@ -1587,6 +1582,9 @@ class StructAnalysisHandler(idaapi.action_handler_t):
 # ---------------------------------------------------------------------------
 # Bulk Rename Handler
 # ---------------------------------------------------------------------------
+
+from pseudonote_extended.qt_compat import PluginFormWrapper
+
 class BulkRenameHandler(idaapi.action_handler_t):
     """Launch the Bulk Function Renamer Dialog."""
     def __init__(self):
@@ -1600,7 +1598,14 @@ class BulkRenameHandler(idaapi.action_handler_t):
             
         try:
             from pseudonote_extended import renamer
-            
+
+            if self.dlg is not None:
+                self.dlg.showNormal()
+                self.dlg.show()
+                self.dlg.raise_()
+                self.dlg.activateWindow()
+                return 1
+
             self.dlg = renamer.BulkRenamer(CONFIG, parent=None)
             self.dlg.show()
         except Exception as e:
@@ -1629,7 +1634,14 @@ class BulkAnalyzeHandler(idaapi.action_handler_t):
             
         try:
             from pseudonote_extended import analyzer
-            
+
+            if self.dlg is not None:
+                self.dlg.showNormal()
+                self.dlg.show()
+                self.dlg.raise_()
+                self.dlg.activateWindow()
+                return 1
+
             self.dlg = analyzer.BulkAnalyzer(parent=None)
             self.dlg.show()
         except Exception as e:
@@ -1659,6 +1671,16 @@ class BulkVarRenameHandler(idaapi.action_handler_t):
         try:
             from pseudonote_extended import var_renamer
 
+            if self.dlg is not None:
+                self.dlg.showNormal()
+                self.dlg.show()
+                self.dlg.raise_()
+                self.dlg.activateWindow()
+                return 1
+
+            # This threaded workbench must retain Python ownership. Parenting
+            # it to IDA and combining that with WA_DeleteOnClose can destroy
+            # the native dialog while queued worker signals are unwinding.
             self.dlg = var_renamer.BulkVariableRenamer(parent=None)
             self.dlg.show()
         except Exception as e:
@@ -1695,41 +1717,11 @@ class SettingsHandler(idaapi.action_handler_t):
 
     def activate(self, ctx):
         import pseudonote_extended.view as vm
-        source_widget = getattr(ctx, "widget", None)
-        source_type = getattr(ctx, "widget_type", None)
-        safe_widget = None
-
-        try:
-            # Hex-Rays uses a native/custom-painted viewport. Leaving it as
-            # the active surface during QDialog.exec_() causes Windows/Qt to
-            # rescale or preserve parts of the Settings window while it is
-            # moved. A normal disassembly viewer does not exhibit that bug.
-            if source_type == idaapi.BWN_PSEUDOCODE:
-                safe_widget = ida_kernwin.open_disasm_window("PseudoNote Settings Host")
-                if safe_widget:
-                    try:
-                        ida_kernwin.jumpto(getattr(ctx, "cur_ea", idaapi.get_screen_ea()))
-                    except Exception:
-                        pass
-                    ida_kernwin.activate_widget(safe_widget, True)
-
-            if vm._view_instance:
-                vm._view_instance.on_settings()
-            else:
-                d = vm.SettingsDialog(CONFIG)
-                d.exec_()
-        finally:
-            if source_widget and source_type == idaapi.BWN_PSEUDOCODE:
-                try:
-                    ida_kernwin.activate_widget(source_widget, True)
-                except Exception:
-                    pass
-            if safe_widget:
-                try:
-                    close_later = getattr(ida_kernwin, "WCLS_CLOSE_LATER", 0)
-                    ida_kernwin.close_widget(safe_widget, close_later)
-                except Exception:
-                    pass
+        if vm._view_instance:
+            vm._view_instance.on_settings()
+        else:
+            d = vm.SettingsDialog(CONFIG)
+            d.exec_()
         return 1
 
     def update(self, ctx):
@@ -2238,7 +2230,7 @@ def _format_c_array(values):
 
 
 def _report_full_copied_output(output, chunk_size=16384):
-    """Write the exact clipboard text to IDA Output without preview truncation."""
+    """Write the exact clipboard text to Output and show a useful confirmation."""
     text = str(output or "")
     ida_kernwin.msg("[PseudoNote] Copied:\n")
     # Large generated arrays can exceed one ida_kernwin.msg() payload. Chunking
@@ -2247,6 +2239,11 @@ def _report_full_copied_output(output, chunk_size=16384):
         ida_kernwin.msg(text[offset:offset + chunk_size])
     if not text.endswith("\n"):
         ida_kernwin.msg("\n")
+    if len(text) <= 800:
+        notice = "Copied to clipboard:\n\n%s" % text
+    else:
+        notice = "Copied %s characters to the clipboard.\n\nThe complete content is also available in IDA Output." % f"{len(text):,}"
+    ida_kernwin.info(notice)
 
 class AdvancedCopyHandler(idaapi.action_handler_t):
     """Handler for copying instruction bytes into various formats."""
@@ -2352,11 +2349,17 @@ MAX_COPY_TREE_CLIPBOARD_CHARS = 10_000_000
 
 class FunctionTreeDialog(QtWidgets.QDialog):
     def __init__(self, root_ea, parent=None):
-        super(FunctionTreeDialog, self).__init__(parent or QtWidgets.QApplication.activeWindow())
+        super(FunctionTreeDialog, self).__init__(parent)
         apply_mac_workspace(self)
         self.setWindowTitle("PseudoNote - Copy Function Tree")
         self.resize(1100, 750)
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowMaximizeButtonHint)
+        self.setWindowFlags(
+            self.windowFlags()
+            | QtCore.Qt.Window
+            | QtCore.Qt.WindowMinimizeButtonHint
+            | QtCore.Qt.WindowMaximizeButtonHint
+            | QtCore.Qt.WindowCloseButtonHint
+        )
         
         self.root_ea = root_ea
         self.mapped_functions = {} # ea -> {name, depth, cfunc_str}
@@ -2704,11 +2707,12 @@ class CopyFunctionTreeHandler(idaapi.action_handler_t):
         ea = idaapi.get_screen_ea()
         f = idaapi.get_func(ea)
         if not f:
-            print("[PseudoNote] No function at current address.")
+            ida_kernwin.msg("[PseudoNote] No function at current address.\n")
+            ida_kernwin.warning("Place the cursor inside a function before opening Copy Function Tree.")
             return 0
             
         # Register and show dialog
-        dlg = FunctionTreeDialog(f.start_ea)
+        dlg = FunctionTreeDialog(f.start_ea, parent=None)
         dlg.show()
         
         # Persist reference
@@ -2856,7 +2860,11 @@ class CopyGlobalXrefTreeHandler(idaapi.action_handler_t):
                     obj_ea = ea_h
 
         if obj_ea == idaapi.BADADDR:
-            print("[PseudoNote] Could not determine global variable address.")
+            ida_kernwin.msg("[PseudoNote] Could not determine global variable address.\n")
+            ida_kernwin.warning(
+                "Could not determine a global variable address.\n\n"
+                "Place the cursor on a global variable or highlight its name, then try again."
+            )
             return 0
             
         # Check if it's actually a data object (basic check)
@@ -2866,7 +2874,7 @@ class CopyGlobalXrefTreeHandler(idaapi.action_handler_t):
             # if they specifically asked for "Global variable"
             pass
 
-        dlg = GlobalXrefTreeDialog(obj_ea)
+        dlg = GlobalXrefTreeDialog(obj_ea, parent=None)
         dlg.show()
         
         # Persist reference
@@ -2874,6 +2882,39 @@ class CopyGlobalXrefTreeHandler(idaapi.action_handler_t):
         if not hasattr(_view_mod, "_copy_tree_dialogs"):
             _view_mod._copy_tree_dialogs = []
         _view_mod._copy_tree_dialogs.append(dlg)
+        return 1
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+class DecryptionWorkbenchHandler(idaapi.action_handler_t):
+    def __init__(self, action_id, title="Decryption Workbench"):
+        idaapi.action_handler_t.__init__(self)
+        self.action_id = action_id
+        self.title = title
+
+    def activate(self, ctx):
+        import ida_kernwin
+        try:
+            import ida_hexrays
+        except ImportError:
+            ida_hexrays = None
+            
+        from pseudonote_extended.decryption_extractor import DecryptionExtractor
+        from pseudonote_extended.ui.decryption_workbench import DecryptionWorkbenchUI
+        
+        vu = None
+        if ida_hexrays and ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+            vu = ida_hexrays.get_widget_vdui(ctx.widget)
+            
+        target = DecryptionExtractor.extract_from_ui(vu)
+        if not target:
+            ida_kernwin.warning("Could not extract a valid decryption target from the current selection.\nSelect some data, string or hex item.")
+            return 0
+            
+        dlg = DecryptionWorkbenchUI(target, None)
+        dlg.exec_()
         return 1
 
     def update(self, ctx):

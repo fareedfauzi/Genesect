@@ -42,8 +42,8 @@ class FlossWorkflowTests(unittest.TestCase):
         self.assertIn("decode_floss_json(stdout, stderr)", SOURCE)
 
     def test_uses_official_json_form_and_supports_legacy_text_output(self):
-        self.assertIn('cmd = [floss_path, "--json"]', SOURCE)
-        self.assertNotIn('cmd = [floss_path, "-j"]', SOURCE)
+        self.assertIn('json_flag = "-j"', SOURCE)
+        self.assertIn('json_flag = "--json"', SOURCE)
         self.assertIn("def decode_floss_text", SOURCE)
         self.assertIn("raw_entries = decode_floss_text(stdout)", SOURCE)
         self.assertIn("find_ida_string_address", SOURCE)

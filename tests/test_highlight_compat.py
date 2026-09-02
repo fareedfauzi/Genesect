@@ -14,14 +14,16 @@ class HighlightCompatibilityTests(unittest.TestCase):
     def test_pseudocode_and_disassembly_states_are_independent(self):
         source = HIGHLIGHT.read_text(encoding="utf-8-sig")
         self.assertIn("pseudocode_highlight_enabled = False", source)
-        self.assertIn("disasm_highlight_enabled = True", source)
+        self.assertIn("disasm_highlight_enabled = False", source)
 
-    def test_disassembly_highlighting_runs_on_the_initial_ui_tick(self):
+    def test_default_ui_tick_only_refreshes_disassembly_when_opted_in(self):
         source = PLUGIN.read_text(encoding="utf-8-sig")
         self.assertIn("create_default_visual_hooks()", source)
         lifecycle = (HIGHLIGHT.parent / "default_visuals.py").read_text(encoding="utf-8-sig")
         self.assertIn("refresh_disasm_highlighting()", lifecycle)
-        self.assertIn("def screen_ea_changed", lifecycle)
+        self.assertNotIn("def screen_ea_changed", lifecycle)
+        highlight_source = HIGHLIGHT.read_text(encoding="utf-8-sig")
+        self.assertIn("if disasm_highlight_enabled:", highlight_source)
 
     def test_disassembly_restores_only_owned_unchanged_colors(self):
         source = HIGHLIGHT.read_text(encoding="utf-8")

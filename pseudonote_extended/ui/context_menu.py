@@ -22,31 +22,35 @@ COMMON_GROUPS = (
         "pseudonote_extended:toggle_indent_guides", "pseudonote_extended:zoom_all_views",
     )),
     ("Utilities/Program Structure", (
+        "pseudonote_extended:decryption_workbench", "-",
         "pseudonote_extended:global_variable_explorer", "pseudonote_extended:dnspy_xrefs", "-",
         "pseudonote_extended:vftable_list", "pseudonote_extended:virtual_class_explorer",
-        "pseudonote_extended:callback_dispatch_resolver", "-",
-        "pseudonote_extended:thread_sync_explorer", "pseudonote_extended:exception_unwind_explorer",
-        "pseudonote_extended:entry_point_explorer", "pseudonote_extended:structure_recovery_explorer",
-        "pseudonote_extended:decompiler_quality_inspector",
+        "pseudonote_extended:com_explorer",
+        "pseudonote_extended:callback_dispatch_resolver",
+        "pseudonote_extended:callback_shellcode_explorer", "pseudonote_extended:call_ranking_explorer", "-",
+        "pseudonote_extended:thread_explorer", "-",
+        "pseudonote_extended:entry_point_explorer", "-",
     )),
     ("Utilities/Malware Analysis", (
-        "pseudonote_extended:anti_analysis_explorer", "pseudonote_extended:process_injection_explorer",
-        "pseudonote_extended:protocol_packet_explorer",
-        "pseudonote_extended:syscall_kernel_mapper", "pseudonote_extended:dynamic_api_resolution_explorer", "-",
-        "pseudonote_extended:api_hash_explorer", "pseudonote_extended:crypto_encoding_explorer",
-        "pseudonote_extended:config_ioc_extractor", "pseudonote_extended:string_decryption_workbench",
+        "pseudonote_extended:findcrypt_explorer", "pseudonote_extended:anti_analysis_explorer",
+        "pseudonote_extended:process_injection_explorer", "pseudonote_extended:protocol_packet_explorer",
+        "pseudonote_extended:api_sequence_explorer", "pseudonote_extended:evidence_graph", "-",
+        "pseudonote_extended:config_ioc_extractor",
     )),
     ("Utilities/Search && Data", (
         "pseudonote_extended:regex_idb_search", "-",
         "pseudonote_extended:floss_strings", "pseudonote_extended:dump_bytes",
     )),
     ("Utilities/IDB Maintenance", (
-        "pseudonote_extended:comment_explorer", "pseudonote_extended:auto_enum_explorer", "-",
-        "pseudonote_extended:change_history_explorer",
+        "pseudonote_extended:comment_explorer", "-",
     )),
 )
 
 PSEUDOCODE_GROUPS = (
+    ("Utilities/Navigation && Views", (
+        "pseudonote_extended:toggle_pseudocode_block",
+        "pseudonote_extended:argument_name_hints",
+    )),
     ("AI Assistant/Rename && Comments (Current Function)", (
         "pseudonote_extended:rename_function", "pseudonote_extended:rename_function_malware",
         "pseudonote_extended:rename_variables", "-",

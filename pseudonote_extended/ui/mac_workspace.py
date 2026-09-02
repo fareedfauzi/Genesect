@@ -122,6 +122,27 @@ QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
 }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QToolTip {{ background: {t.surface_alt}; color: {t.text}; border: 1px solid {t.border_strong}; padding: 5px; }}
+QMenu {{ 
+    background: {t.window}; 
+    color: {t.text};
+    border: 1px solid {t.border};
+    border-radius: 6px;
+    padding: 6px;
+}}
+QMenu::item {{
+    padding: 6px 24px 6px 12px;
+    border-radius: 4px;
+    background: transparent;
+}}
+QMenu::item:selected {{
+    background: {t.accent};
+    color: white;
+}}
+QMenu::separator {{
+    height: 1px;
+    background: {t.border};
+    margin: 4px 0px;
+}}
 """
 
 

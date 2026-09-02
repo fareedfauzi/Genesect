@@ -19,22 +19,23 @@ import idc
 from pseudonote_extended.qt_compat import QtCore, QtWidgets
 from pseudonote_extended.ui.components import PageHeader, Card
 from pseudonote_extended.ui.mac_workspace import apply_mac_workspace
+from pseudonote_extended.api_knowledge import normalize_api_name
 
 
 _extractor = None
 _MAX_RESULTS = 200000
 _URL = re.compile(r"\b(?:https?|wss?|ftp)://[^\s\"'<>]+", re.I)
 _DOMAIN = re.compile(r"(?<![\w.-])(?:[A-Za-z0-9-]{1,63}\.)+(?:com|net|org|io|dev|ru|cn|info|biz|xyz|top|local|onion)(?::\d{1,5})?(?![\w.-])", re.I)
-_IP = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\d.])")
+_IP = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
 _WIN_PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\)[^\r\n\"<>|]{3,}")
 _UNIX_PATH = re.compile(r"(?<![\w.])/(?:etc|tmp|var|usr|opt|home|dev|proc|Library|Users)/[^\s\"']+")
 _REGISTRY = re.compile(r"(?:HKEY_(?:LOCAL_MACHINE|CURRENT_USER|CLASSES_ROOT|USERS)|HKLM|HKCU)\\[^\r\n\"']+", re.I)
-_MUTEX_HINT = re.compile(r"(?:global\\|local\\|mutex|mutant|singleton|alreadyexists)", re.I)
-_KEY_HINT = re.compile(r"(?:api[_ -]?key|secret|token|password|passwd|public[_ -]?key|private[_ -]?key|aes[_ -]?key|rc4[_ -]?key)", re.I)
-_CAMPAIGN_HINT = re.compile(r"(?:campaign|bot[_ -]?id|victim[_ -]?id|install[_ -]?id|affiliate|group[_ -]?id|build[_ -]?id)", re.I)
+_MUTEX_HINT = re.compile(r"(?:global\\|local\\)[^\r\n\"'\\]+", re.I)
+_KEY_HINT = re.compile(r"\b(?:api[_ -]?key|secret|token|password|passwd|public[_ -]?key|private[_ -]?key|aes[_ -]?key|rc4[_ -]?key)\b\s*[:=]\s*[^\r\n\"'\s]+", re.I)
+_CAMPAIGN_HINT = re.compile(r"\b(?:campaign|bot[_ -]?id|victim[_ -]?id|install[_ -]?id|affiliate|group[_ -]?id|build[_ -]?id)\b\s*[:=]\s*[^\r\n\"'\s]+", re.I)
 _BASE64 = re.compile(r"^(?:[A-Za-z0-9+/]{4}){6,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$")
 _HEX_BLOB = re.compile(r"^(?:[0-9A-Fa-f]{2}){16,}$")
-_CONFIG_APIS = re.compile(r"(?:getprivateprofilestring|readfile|fread|regqueryvalue|getenvironmentvariable|json|xml|yaml|ini|config|decrypt|decode|base64)", re.I)
+_CONFIG_APIS = re.compile(r"(?:getprivateprofilestring|readfile|fread|regqueryvalue|getenvironmentvariable|(?:^|_)(?:json|xml|yaml|ini|config|decrypt|decode|base64)(?:_|$))", re.I)
 
 
 def _hex(value):
@@ -104,12 +105,13 @@ def _encoded_candidate(text):
     if _BASE64.fullmatch(compact):
         try:
             raw = base64.b64decode(compact, validate=True)
-            if len(raw) >= 16:
-                return "Base64-encoded configuration candidate", _entropy(raw)
+            ent = _entropy(raw)
+            if len(raw) >= 16 and ent >= 3.0:
+                return "Base64-encoded configuration candidate", ent
         except Exception:
             return None
     raw = compact.encode("utf-8", errors="ignore")
-    if len(raw) >= 32 and _entropy(raw) >= 4.6 and not re.search(r"\s", compact):
+    if len(raw) >= 64 and _entropy(raw) >= 5.5 and not re.search(r"\s", compact):
         return "High-entropy configuration candidate", _entropy(raw)
     return None
 
@@ -149,14 +151,22 @@ def scan_strings_and_iocs():
     return rows, by_function
 
 
-def scan_configuration_readers():
+def scan_configuration_readers(evidence_functions=None):
     rows = []
+    evidence_functions = set(evidence_functions or ())
     for api_ea, api_name in idautils.Names():
-        if not _CONFIG_APIS.search(api_name or ""):
+        normalized = normalize_api_name(api_name)
+        if not _CONFIG_APIS.search(normalized):
             continue
         for xref in idautils.XrefsTo(api_ea, 0):
-            if xref.type in (getattr(idaapi, "fl_CF", 16), getattr(idaapi, "fl_CN", 17)) and _func_start(xref.frm) != idaapi.BADADDR:
-                rows.append(_row("Configuration reader / decoder", xref.frm, api_name, "parser/decode primitive", "high", "direct call to configuration, parsing, or decoding API", idc.generate_disasm_line(xref.frm, 0) or ""))
+            owner = _func_start(xref.frm)
+            if xref.type not in (getattr(idaapi, "fl_CF", 16), getattr(idaapi, "fl_CN", 17)) or owner == idaapi.BADADDR:
+                continue
+            dual_use = normalized.casefold() in {"readfile", "fread"} or bool(re.search(r"(?:json|xml|yaml|decode|base64|config|decrypt)", normalized, re.I))
+            if dual_use and owner not in evidence_functions:
+                continue
+            evidence = "API call corroborated by typed configuration/IOC references in the same function" if dual_use else "explicit configuration-source API"
+            rows.append(_row("Configuration reader / decoder", xref.frm, normalized, "parser/decode primitive", "high", evidence, idc.generate_disasm_line(xref.frm, 0) or ""))
     return rows
 
 
@@ -180,7 +190,7 @@ def correlate_configuration_clusters(by_function):
 
 def extract_configuration_and_iocs():
     rows, by_function = scan_strings_and_iocs()
-    rows.extend(scan_configuration_readers())
+    rows.extend(scan_configuration_readers(by_function))
     rows.extend(correlate_configuration_clusters(by_function))
     unique = {}
     for item in rows[:_MAX_RESULTS]:
@@ -254,13 +264,20 @@ class ConfigurationIOCExtractor(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for row_index, row in enumerate(self.rows):
-            values = [row["kind"], _hex(row["ea"]), row["function"], row["value"], row["role"], row["confidence"], row["evidence"]]
-            for column, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.UserRole, row_index)
-                self.table.setItem(row_index, column, item)
+        self.table.setRowCount(max(1, len(self.rows)))
+        if not self.rows:
+            item = QtWidgets.QTableWidgetItem('No results found.')
+            item.setFlags(QtCore.Qt.ItemIsEnabled)
+            item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, max(1, self.table.columnCount()))
+        else:
+            for row_index, row in enumerate(self.rows):
+                values = [row["kind"], _hex(row["ea"]), row["function"], row["value"], row["role"], row["confidence"], row["evidence"]]
+                for column, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.UserRole, row_index)
+                    self.table.setItem(row_index, column, item)
         self.table.resizeColumnsToContents()
         self.table.setColumnWidth(3, min(520, max(260, self.table.columnWidth(3))))
         self.table.setColumnWidth(6, max(380, self.table.columnWidth(6)))
@@ -278,6 +295,8 @@ class ConfigurationIOCExtractor(ida_kernwin.PluginForm):
         return self.rows[int(index)] if index is not None and 0 <= int(index) < len(self.rows) else None
 
     def apply_filter(self, text):
+        if not getattr(self, 'rows', None):
+            return
         needle = str(text or "").strip().lower()
         for row_index in range(self.table.rowCount()):
             source = self.rows[int(self.table.item(row_index, 0).data(QtCore.Qt.UserRole))]

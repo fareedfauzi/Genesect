@@ -10,14 +10,7 @@ import ida_lines
 
 _hooks_instance = None
 _MAX_LINES = 10000
-_STYLE_GLYPHS = {"Subtle": "│", "Dotted": "┊", "Strong": "┃"}
-_GUIDE_COLOR_NAME = "SCOLOR_AUTOCMT"
-
-
-def _level_mark(glyph, indent, level):
-    """Create a quiet guide using IDA's theme-aware light comment color."""
-    color = getattr(ida_lines, _GUIDE_COLOR_NAME, ida_lines.SCOLOR_AUTOCMT)
-    return ida_lines.COLSTR(glyph + " " * max(0, indent - 1), color)
+_FALLBACK_COLOR = "CK_EXTRA14"
 
 
 def _config():
@@ -31,9 +24,6 @@ def _leading_spaces(line):
 
 
 def _detect_indent(lines):
-    configured = int(getattr(_config(), "indent_guides_width", 0) or 0)
-    if configured > 0:
-        return max(1, min(configured, 8))
     values = sorted(set(_leading_spaces(line.line) for line in lines if _leading_spaces(line.line) > 0))
     if not values:
         return 2
@@ -51,72 +41,82 @@ def _detect_indent(lines):
 
 def _blank_levels(lines, indent):
     levels = [max(0, _leading_spaces(line.line) // indent) for line in lines]
-    if not bool(getattr(_config(), "indent_guides_empty_lines", False)):
-        return levels
-    for index, line in enumerate(lines):
-        if ida_lines.tag_remove(line.line).strip():
-            continue
-        previous = next((levels[pos] for pos in range(index - 1, -1, -1) if ida_lines.tag_remove(lines[pos].line).strip()), 0)
-        following = next((levels[pos] for pos in range(index + 1, len(lines)) if ida_lines.tag_remove(lines[pos].line).strip()), 0)
-        levels[index] = min(previous, following) if previous and following else max(previous, following)
     return levels
 
 
 def apply_indent_guides(lines):
+    """Calculate guide positions without modifying Hex-Rays-owned text."""
     if not lines or not bool(getattr(_config(), "indent_guides_enabled", True)):
-        return
+        return 2, []
     indent = _detect_indent(lines)
-    style = str(getattr(_config(), "indent_guides_style", "Subtle") or "Subtle")
-    glyph = _STYLE_GLYPHS.get(style, _STYLE_GLYPHS["Subtle"])
-    levels = _blank_levels(lines, indent)
-    # IDA 8.3 exposes qstrvec_t through SWIG: integer indexing works, slicing does not.
-    for index in range(min(len(lines), _MAX_LINES)):
-        line = lines[index]
-        level = levels[index]
-        if level <= 0:
-            continue
-        plain = ida_lines.tag_remove(line.line)
-        # Empty tagged lines can carry navigation metadata but no replaceable
-        # whitespace run. Leave them untouched for a cleaner, safer layout.
-        if not plain.strip():
-            continue
-        if glyph in plain[:level * indent + 2]:
-            continue
-        leading = _leading_spaces(line.line)
-        marks = "".join(_level_mark(glyph, indent, nesting) for nesting in range(level))
-        if plain.strip():
-            # Hex-Rays prefixes lines with invisible address/color tags, so the raw
-            # string rarely starts with its visible whitespace. Find the one intact
-            # leading run and replace only that run. Never use a global replacement:
-            # it can corrupt color tags; replace never spacing inside code or strings.
-            prefix = " " * leading
-            raw_offset = line.line.find(prefix)
-            if raw_offset >= 0:
-                line.line = line.line[:raw_offset] + marks + line.line[raw_offset + leading:]
+    return indent, _blank_levels(lines, indent)
+
+
+def _line_number(place):
+    try:
+        return int(ida_kernwin.place_t.as_simpleline_place_t(place).n)
+    except Exception:
+        return -1
+
+
+def _direct_color(value):
+    """Convert #RRGGBB to IDA's direct 0xAABBGGRR overlay color."""
+    import re
+    match = re.fullmatch(r"#?([0-9A-Fa-f]{6})", str(value or ""))
+    if not match:
+        return None
+    raw = match.group(1)
+    red, green, blue = int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16)
+    alpha = 0x78
+    return (alpha << 24) | (blue << 16) | (green << 8) | red
+
+
+def _render_indent_guides(out, widget, rin):
+    """Add transient background ranges through IDA's supported renderer API."""
+    if not bool(getattr(_config(), "indent_guides_enabled", True)):
+        return
+    if not all(hasattr(ida_kernwin, name) for name in (
+        "line_rendering_output_entry_t", "LROEF_CPS_RANGE",
+    )):
+        return
+    vu = ida_hexrays.get_widget_vdui(widget) if widget else None
+    if not vu or not vu.cfunc:
+        return
+    lines = vu.cfunc.get_pseudocode()
+    indent, levels = apply_indent_guides(lines)
+    color = _direct_color(getattr(_config(), "indent_guides_color", ""))
+    if color is None:
+        color = getattr(ida_kernwin, _FALLBACK_COLOR, None)
+    if color is None:
+        return
+    for section in rin.sections_lines:
+        for rendered_line in section:
+            index = _line_number(rendered_line.at)
+            if index < 0 or index >= min(len(levels), _MAX_LINES):
+                continue
+            level = levels[index]
+            if level <= 0 or not ida_lines.tag_remove(lines[index].line).strip():
+                continue
+            for nesting in range(level):
+                entry = ida_kernwin.line_rendering_output_entry_t(rendered_line)
+                entry.flags = ida_kernwin.LROEF_CPS_RANGE
+                entry.cpx = nesting * indent
+                entry.nchars = 1
+                entry.bg_color = color
+                out.entries.push_back(entry)
 
 
 def indent_guide_hooks_installed():
     return _hooks_instance is not None
 
 
-def refresh_pseudocode_widget(widget, regenerate=False):
-    """Apply marks to an already-cached cfunc and refresh its visible text."""
-    vu = ida_hexrays.get_widget_vdui(widget) if widget else None
-    if vu:
+def refresh_pseudocode_widget(widget):
+    """Refresh the supported rendering overlay without regenerating ctree text."""
+    if widget:
         try:
-            if vu.cfunc and bool(getattr(_config(), "indent_guides_enabled", True)):
-                apply_indent_guides(vu.cfunc.get_pseudocode())
-            if regenerate:
-                # Regenerate once when a late hook is installed so func_printed
-                # runs for restored tabs too. IDAGuides uses this refresh path.
-                vu.refresh_view(True)
-            else:
-                vu.refresh_ctext()
+            ida_kernwin.refresh_custom_viewer(widget)
         except Exception:
-            try:
-                vu.refresh_view(True) if regenerate else vu.refresh_ctext()
-            except Exception:
-                pass
+            pass
     idaapi.request_refresh(idaapi.IWID_PSEUDOCODE)
 
 
@@ -124,7 +124,7 @@ def refresh_current_pseudocode():
     refresh_pseudocode_widget(ida_kernwin.get_current_widget())
 
 
-def refresh_open_pseudocode_widgets(regenerate=False):
+def refresh_open_pseudocode_widgets():
     """Refresh every restored pseudocode tab, not only the currently focused one."""
     get_count = getattr(ida_kernwin, "get_widget_qty", None)
     get_widget = getattr(ida_kernwin, "getn_widget", None)
@@ -136,7 +136,7 @@ def refresh_open_pseudocode_widgets(regenerate=False):
         for index in range(int(get_count())):
             widget = get_widget(index)
             if widget and idaapi.get_widget_type(widget) == idaapi.BWN_PSEUDOCODE:
-                refresh_pseudocode_widget(widget, regenerate=regenerate)
+                refresh_pseudocode_widget(widget)
                 refreshed = True
     except Exception:
         pass
@@ -150,26 +150,20 @@ def create_indent_guide_hooks():
         return _hooks_instance
     if not ida_hexrays.init_hexrays_plugin():
         return None
+        
+    if not hasattr(ida_kernwin.UI_Hooks, "get_lines_rendering_info"):
+        return None
 
-    class _IndentGuideHooks(ida_hexrays.Hexrays_Hooks):
+    class _IndentGuideHooks(ida_kernwin.UI_Hooks):
         def __init__(self):
-            ida_hexrays.Hexrays_Hooks.__init__(self)
+            ida_kernwin.UI_Hooks.__init__(self)
 
-        def func_printed(self, cfunc):
+        def get_lines_rendering_info(self, out, widget, rin):
             try:
-                if cfunc and bool(getattr(_config(), "indent_guides_enabled", True)):
-                    apply_indent_guides(cfunc.get_pseudocode())
+                if idaapi.get_widget_type(widget) == idaapi.BWN_PSEUDOCODE:
+                    _render_indent_guides(out, widget, rin)
             except Exception as exc:
                 ida_kernwin.msg("[PseudoNote] Indent mark rendering skipped: %s\n" % exc)
-            return 0
-
-        def text_ready(self, vu):
-            try:
-                if vu and vu.cfunc and bool(getattr(_config(), "indent_guides_enabled", True)):
-                    apply_indent_guides(vu.cfunc.get_pseudocode())
-            except Exception as exc:
-                ida_kernwin.msg("[PseudoNote] Indent mark rendering skipped: %s\n" % exc)
-            return 0
 
     instance = _IndentGuideHooks()
     if not instance.hook():
@@ -194,7 +188,7 @@ class ToggleIndentGuidesHandler(ida_kernwin.action_handler_t):
         config.indent_guides_enabled = not bool(getattr(config, "indent_guides_enabled", True))
         config.save()
         create_indent_guide_hooks()
-        refresh_current_pseudocode()
+        refresh_open_pseudocode_widgets()
         ida_kernwin.msg("[PseudoNote] Indent marks %s\n" % ("enabled" if config.indent_guides_enabled else "disabled"))
         return 1
 

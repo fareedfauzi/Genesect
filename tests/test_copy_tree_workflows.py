@@ -22,8 +22,32 @@ class CopyTreeWorkflowTests(unittest.TestCase):
         self.assertIn("Function tree mapping failed", SECTION)
         self.assertIn("Global xref tree mapping failed", SECTION)
 
+    def test_invalid_targets_show_user_facing_warning_dialogs(self):
+        self.assertIn("Place the cursor inside a function before opening Copy Function Tree.", SOURCE)
+        self.assertIn("Could not determine a global variable address.", SOURCE)
+        self.assertGreaterEqual(SOURCE.count("ida_kernwin.warning("), 2)
+
     def test_dialog_releases_retained_reference(self):
         self.assertIn("_copy_tree_dialogs.remove(self)", SECTION)
+
+    def test_tree_dialogs_are_standalone_taskbar_windows(self):
+        self.assertIn("super(FunctionTreeDialog, self).__init__(parent)", SOURCE)
+        self.assertNotIn("parent or QtWidgets.QApplication.activeWindow()", SOURCE)
+        self.assertIn("| QtCore.Qt.Window", SECTION)
+        self.assertIn("| QtCore.Qt.WindowMinimizeButtonHint", SECTION)
+        self.assertIn("dlg = FunctionTreeDialog(f.start_ea, parent=None)", SOURCE)
+        self.assertIn("dlg = GlobalXrefTreeDialog(obj_ea, parent=None)", SOURCE)
+
+    def test_tree_handlers_do_not_use_dock_wrappers(self):
+        function_handler = SOURCE[
+            SOURCE.index("class CopyFunctionTreeHandler"):
+            SOURCE.index("class GlobalXrefTreeDialog")
+        ]
+        global_handler = SOURCE[SOURCE.index("class CopyGlobalXrefTreeHandler"):]
+        self.assertIn("dlg.show()", function_handler)
+        self.assertIn("dlg.show()", global_handler)
+        self.assertNotIn("PluginFormWrapper", function_handler)
+        self.assertNotIn("PluginFormWrapper", global_handler)
 
     def test_decompile_error_is_preserved_in_clipboard_output(self):
         self.assertIn('code = f"[Decompilation failed: {exc}]"', SECTION)

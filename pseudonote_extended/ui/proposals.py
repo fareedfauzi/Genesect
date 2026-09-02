@@ -13,37 +13,9 @@ def _accepted_value():
     return getattr(dialog_code, "Accepted", 1)
 
 
-def _open_safe_review_surface():
-    """Move modal review dialogs off Hex-Rays' native viewport."""
-    try:
-        import idaapi
-        import ida_kernwin
-        source = ida_kernwin.get_current_widget()
-        if source and idaapi.get_widget_type(source) == idaapi.BWN_PSEUDOCODE:
-            safe = ida_kernwin.open_disasm_window("PseudoNote Review Host")
-            if safe:
-                ida_kernwin.activate_widget(safe, True)
-                return source, safe
-    except Exception:
-        pass
-    return None, None
-
-
-def _restore_review_surface(source, safe):
-    try:
-        import ida_kernwin
-        if source:
-            ida_kernwin.activate_widget(source, True)
-        if safe:
-            close_later = getattr(ida_kernwin, "WCLS_CLOSE_LATER", 0)
-            ida_kernwin.close_widget(safe, close_later)
-    except Exception:
-        pass
-
-
 class ChangeReviewDialog(QtWidgets.QDialog):
     def __init__(self, title, original, proposed, apply_label="Apply", parent=None):
-        super().__init__(None)
+        super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(820, 480)
         layout = QtWidgets.QVBoxLayout(self)
@@ -74,7 +46,7 @@ class ChangeReviewDialog(QtWidgets.QDialog):
 
 class MappingReviewDialog(QtWidgets.QDialog):
     def __init__(self, title, mapping, source_label="Current", proposal_label="Proposed", parent=None):
-        super().__init__(None)
+        super().__init__(parent)
         self.mapping = dict(mapping)
         self.setWindowTitle(title)
         self.resize(760, 520)
@@ -116,20 +88,12 @@ class MappingReviewDialog(QtWidgets.QDialog):
 
 
 def confirm_change(title, original, proposed, apply_label="Apply", parent=None):
-    source, safe = _open_safe_review_surface()
-    try:
-        dialog = ChangeReviewDialog(title, original, proposed, apply_label, parent)
-        return dialog.exec_() == _accepted_value()
-    finally:
-        _restore_review_surface(source, safe)
+    dialog = ChangeReviewDialog(title, original, proposed, apply_label, parent)
+    return dialog.exec_() == _accepted_value()
 
 
 def select_mapping(title, mapping, source_label="Current", proposal_label="Proposed", parent=None):
-    source, safe = _open_safe_review_surface()
-    try:
-        dialog = MappingReviewDialog(title, mapping, source_label, proposal_label, parent)
-        if dialog.exec_() != _accepted_value():
-            return None
-        return dialog.selected_mapping()
-    finally:
-        _restore_review_surface(source, safe)
+    dialog = MappingReviewDialog(title, mapping, source_label, proposal_label, parent)
+    if dialog.exec_() != _accepted_value():
+        return None
+    return dialog.selected_mapping()

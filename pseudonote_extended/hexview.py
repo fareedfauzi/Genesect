@@ -392,8 +392,10 @@ class HexCanvas(QtWidgets.QAbstractScrollArea):
     selection_changed = QtCore.Signal(object, object)   # start_ea, end_ea (inclusive)
     hover_changed = QtCore.Signal(object, object)       # ea, byte_value
 
+
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self._bmap        = None
         self._highlights  = []
         self._palette_idx = 0
@@ -1089,6 +1091,7 @@ class HexToolbar(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self.setFixedHeight(34)
         
         T = _build_palette()

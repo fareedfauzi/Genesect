@@ -42,29 +42,21 @@ An interactive, lazily-loaded hierarchical visualization interface for navigatin
 
 *   **Global Variable Explorer:** Aggregates read/write access patterns, initialization logic, and alias definitions for global objects.
 *   **Virtual-Class Explorer:** Identifies RTTI structures, virtual method tables (vtables), and inheritance models to assist in C++ class reconstruction.
-*   **Callback and Dispatch Resolver:** Locates function pointer assignments, dispatch tables, and indirect execution transfers.
-*   **Thread and Synchronization Explorer:** Scans for thread creation APIs, synchronization primitives (mutexes, events), and shared global state access patterns.
-*   **Exception and Unwind Explorer:** Identifies SEH handlers, C++ landing pads, and stack unwind metadata.
+*   **Callback Explorer:** Locates function pointer assignments, dispatch tables, and indirect execution transfers.
+*   **Thread Explorer:** Maps thread-creation APIs, recovered entry points, APC scheduling, completion queues, and explicit message activity.
 *   **Entry-Point Explorer:** Enumerates PE entry points, exported functions, TLS callbacks, and constructor arrays for rapid initial triage.
-*   **Structure Recovery Explorer:** Correlates pointer-offset access patterns across multiple functions to infer complex structure definitions.
-
-### Decompiler Quality Inspector
-
-An automated diagnostic utility that identifies Hex-Rays decompilation failures, including suspicious type casting, prototype mismatches, unresolved indirect calls, and stack frame inconsistencies.
 
 ## Threat Intelligence & Malware Explorers
 
 PseudoNote Extended includes specialized heuristic engines designed to accelerate malware triage.
 
+*   **Find Crypt Explorer:** Detects exact crypto/hash constants and tables plus Windows CryptoAPI, CNG, DPAPI, SChannel, compression, and encoding APIs. It also covers common cross-platform crypto, hashing, compression, encoding, modern elliptic-curve, and post-quantum library symbols. Scanning is read-only; annotation requires explicit confirmation and preserves analyst-defined names.
 *   **Anti-Analysis Explorer:** Detects environmental fingerprinting, virtual machine evasion, timing checks, and debugger detection mechanisms.
 *   **Process Injection Explorer:** Correlates memory allocation, cross-process write operations, and thread creation APIs to identify injection sequences.
-*   **C2 & Protocol Explorer:** Analyzes network initialization, socket configuration, and serialization routines to map command-and-control structures.
-*   **Syscall & Kernel Interface Mapper:** Identifies direct system calls, `DeviceIoControl` usage, and kernel-mode transition points.
-*   **Dynamic API Resolution Explorer:** Traces custom API hashing algorithms, PE Export Directory parsing, and manual payload loading mechanisms.
-*   **API Hash Explorer:** Resolves suspected API hashes against the bundled `apilist.txt` dataset.
-*   **Crypto and Encoding Explorer:** Identifies cryptographic constants, Base64 tables, XOR loops, and compression algorithms.
+*   **C2, Protocol and Packet Explorer:** Correlates socket, WinINet/WinHTTP, TLS, WebSocket, MQTT, AMQP, gRPC, SSH, named-pipe, and mailslot activity. It recovers network-correlated endpoints, HTTP/protocol artifacts, bidirectional sessions, beacon timing candidates, dispatch IDs, framing constants, repeated non-stack packet fields, serialization helpers, and evidence-backed handlers. Generic comparisons, stack displacements, unstructured callees, loopback addresses, and unrelated endpoint strings are downgraded or suppressed.
+*   **API Sequence Explorer:** Correlates ordered multi-API behaviors such as remote-thread injection, process hollowing, runtime API resolution, and registry persistence. Isolated dual-use API calls are omitted.
+*   **API Classification Explorer:** Classifies and correlates API calls to identify malware behaviors and explore evidence.
 *   **Configuration and IOC Extractor:** Extracts hardcoded IP addresses, domains, registry keys, and embedded configuration blobs based on string access patterns.
-*   **String Decryption Workbench:** Heuristically detects runtime string decoding loops and provides a safe, static preview of the decoded payloads without execution.
 
 ## Data Extraction and Pivoting
 
@@ -105,14 +97,11 @@ Exports a formatted, indented text representation of either a function's caller/
 
 ## IDB Maintenance Operations
 
-### Automatic Enum Recovery
-
-Scans imported API definitions against known OS SDK structures, automatically mapping standard integer parameters to symbolic enumerations (e.g., process creation flags, memory protection constants) within the decompiled output.
-
 ### Comment Explorer
 
 Provides a centralized interface to filter, inspect, edit, or remove all user-defined and AI-generated comments across the entire IDB.
 
-### Change History and Undo Explorer
 
-Maintains a comprehensive transaction log of all IDB modifications executed by PseudoNote Extended. Facilitates selective rollback operations to revert erroneous structural changes.
+### Find Crypt Explorer
+
+Inspired by GhidraFindcrypt, this explorer uses exact byte signatures to locate known constants and tables, then correlates direct Windows and cross-platform cryptography, hashing, compression, and encoding API calls. Scanning never modifies the IDB. Use **Annotate Selected...** to explicitly name and comment a constant after reviewing the evidence.

@@ -25,6 +25,29 @@ class ProtocolPacketExplorerTests(unittest.TestCase):
         self.assertIn('"heuristic"', SOURCE)
         self.assertIn("requiring analyst validation", SOURCE)
 
+    def test_correlates_protocol_artifacts_framing_and_sessions(self):
+        for marker in ("scan_protocol_artifacts", "scan_protocol_framing", "scan_session_behavior", "bidirectional exchange"):
+            self.assertIn(marker, SOURCE)
+
+    def test_noise_controls_exclude_stack_fields_and_generic_handlers(self):
+        self.assertIn("_STACK_BASE", SOURCE)
+        self.assertIn("len(accesses) < 2", SOURCE)
+        self.assertIn("if not signals", SOURCE)
+        self.assertIn("_COMMON_CONTROL_VALUES", SOURCE)
+
+    def test_endpoints_are_promoted_only_when_correlated_to_network_paths(self):
+        self.assertIn("_network_related_functions", SOURCE)
+        self.assertIn("validated endpoint referenced by network path", SOURCE)
+        self.assertIn('confidence="low"', SOURCE)
+
+    def test_supports_modern_and_cross_platform_protocol_stacks(self):
+        for marker in ("websocket", "mqtt", "amqp", "grpc", "tls_read", "pr_read"):
+            self.assertIn(marker, SOURCE.lower())
+
+    def test_detects_ipc_c2_channels_and_beacon_timing(self):
+        for marker in ("scan_ipc_channels", "CreateNamedPipe", "TransactNamedPipe", "scan_beacon_timing", "NtDelayExecution"):
+            self.assertIn(marker, SOURCE)
+
     def test_action_is_registered_and_available_in_utilities(self):
         action = "pseudonote_extended:protocol_packet_explorer"
         self.assertGreaterEqual(PLUGIN.count(action), 2)

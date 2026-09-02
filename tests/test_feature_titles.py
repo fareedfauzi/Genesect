@@ -27,10 +27,10 @@ class FeatureTitleTests(unittest.TestCase):
     def test_primary_utility_titles_use_standard_prefix(self):
         expected = {
             "hexview.py": "PseudoNote - Hex Viewer",
-            "vftable.py": "PseudoNote - Browse Virtual Tables",
+            "vftable.py": "PseudoNote - VTable Explorer",
             "xrefs.py": "PseudoNote - Call Tree",
             "floss_strings.py": "PseudoNote - Discover Strings with FLOSS",
-            "api_hash_explorer.py": "PseudoNote - API Hash Explorer",
+            "findcrypt_explorer.py": "PseudoNote - Find Crypt Explorer",
         }
         for filename, title in expected.items():
             self.assertIn(title, source(filename), filename)
