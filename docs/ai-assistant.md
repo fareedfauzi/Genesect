@@ -2,7 +2,13 @@
 
 The procedures detailed in this document are accessible via **Right-Click > PseudoNote > AI Assistant**. Proper AI provider configuration and completion of IDA Pro's auto-analysis are prerequisites for executing function-level analysis.
 
-## Core Interface: PseudoNote Pane (`Ctrl+Alt+G`)
+## Core Interface: PseudoNote Pane
+
+<img width="797" height="128" alt="image" src="https://github.com/user-attachments/assets/04a4a801-4014-4451-9ef7-d19d29b72b18" />
+
+<img width="1529" height="668" alt="image" src="https://github.com/user-attachments/assets/c153a9f6-043f-469c-aea3-e72abb030fb4" />
+
+<img width="1533" height="679" alt="image" src="https://github.com/user-attachments/assets/158ffd62-b994-4382-9a82-44b6ad02633e" />
 
 The primary dockable panel provides multiple analytical contexts.
 
@@ -13,7 +19,9 @@ The primary dockable panel provides multiple analytical contexts.
 
 ## Interactive Contextual Analysis
 
-### Function Chat (`Ctrl+Alt+A`)
+### Function Chat
+
+<img width="1532" height="865" alt="image" src="https://github.com/user-attachments/assets/8725b31c-7db5-4ce1-a863-eb966b2404a9" />
 
 1. Navigate to the target function and invoke **Chat About This Function**.
 2. Formulate a query or utilize the predefined tools (e.g., **Show pseudocode**, **Explain function**, **Suggest function name**).
@@ -22,12 +30,16 @@ The primary dockable panel provides multiple analytical contexts.
 
 ### Function Chain Chat
 
+<img width="1860" height="875" alt="image" src="https://github.com/user-attachments/assets/3568115b-c9b9-42e1-97a5-21f09e3946c0" />
+
 1. Invoke the command on a designated entry function.
 2. Define the analytical scope by setting the maximum graph depth and node count, then execute **Build Function Graph**.
 3. Select the relevant caller and callee nodes from the generated hierarchy.
 4. Issue queries spanning the selected scope. Restrict the graph size to maintain context limits and analytical focus.
 
 ### Autonomous Investigation
+
+<img width="1532" height="869" alt="image" src="https://github.com/user-attachments/assets/8cd64480-9680-4185-80a7-ed2f274b2698" />
 
 1. Invoke **Autonomous Investigation** on the entry function.
 2. Define specific analytical objectives (e.g., "Identify cryptographic constants and execution flow") or execute the default malware analysis profile.
@@ -37,6 +49,9 @@ The primary dockable panel provides multiple analytical contexts.
 ## Bulk Processing Operations
 
 ### Bulk Function Renamer (`Ctrl+Shift+R`)
+
+<img width="1200" height="850" alt="image" src="https://github.com/user-attachments/assets/f6e0262f-4fb8-407a-8989-dbb210e95bf6" />
+
 
 A high-throughput batch processor for autonomous function renaming, constrained strictly by behavioral evidence derived from decompiled pseudocode.
 
