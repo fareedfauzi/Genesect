@@ -68,26 +68,53 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -
     if (Test-Path $TargetPkg) { Remove-Item -Recurse -Force $TargetPkg }
     Copy-Item -Recurse -Force (Join-Path $ScriptDir "pseudonote_extended") -Destination $TargetPkg
 } else {
-    Write-Host "[*] Remote installation detected. Downloading latest version from GitHub..."
+    Write-Host "[*] Remote installation detected. Downloading latest release from GitHub..."
     $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
     
-    $ZipPath = Join-Path $TmpDir "main.zip"
-    Invoke-WebRequest -Uri "https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip" -OutFile $ZipPath
-    
-    Write-Host "[*] Extracting..."
-    Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
-    
-    $ExtractedDir = Join-Path $TmpDir "PseudoNote-Extended-main"
-    Copy-Item -Force (Join-Path $ExtractedDir "PseudoNoteExtended.py") -Destination $IdaPlugins
-    
-    $TargetPkg = Join-Path $IdaPlugins "pseudonote_extended"
-    if (Test-Path $TargetPkg) { Remove-Item -Recurse -Force $TargetPkg }
-    
-    # PowerShell Copy-Item -Recurse copies the folder itself into the destination, so destination should be $IdaPlugins
-    Copy-Item -Recurse -Force (Join-Path $ExtractedDir "pseudonote_extended") -Destination $IdaPlugins
-    
-    Remove-Item -Recurse -Force $TmpDir
+    try {
+        $ZipPath = Join-Path $TmpDir "PseudoNote-Extended.zip"
+        $ReleaseUri = "https://github.com/fareedfauzi/PseudoNote-Extended/releases/latest/download/PseudoNote-Extended.zip"
+        $FallbackUri = "https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip"
+
+        $OldProgressPreference = $ProgressPreference
+        $ProgressPreference = "SilentlyContinue"
+        try {
+            try {
+                Invoke-WebRequest -Uri $ReleaseUri -OutFile $ZipPath -ErrorAction Stop
+            } catch {
+                Write-Host "[!] Release zip unavailable. Falling back to source archive..."
+                Invoke-WebRequest -Uri $FallbackUri -OutFile $ZipPath -ErrorAction Stop
+            }
+        } finally {
+            $ProgressPreference = $OldProgressPreference
+        }
+        
+        Write-Host "[*] Extracting..."
+        Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
+
+        $CandidateDirs = @((Get-Item -LiteralPath $TmpDir)) + @(Get-ChildItem -Path $TmpDir -Directory -Recurse)
+        $ExtractedDir = $CandidateDirs | Where-Object {
+            (Test-Path (Join-Path $_.FullName "PseudoNoteExtended.py")) -and
+            (Test-Path (Join-Path $_.FullName "pseudonote_extended"))
+        } | Select-Object -First 1
+
+        if (-not $ExtractedDir) {
+            Write-Error "Downloaded archive does not contain PseudoNoteExtended.py and pseudonote_extended."
+            exit 1
+        }
+
+        $SourceDir = $ExtractedDir.FullName
+        Copy-Item -Force (Join-Path $SourceDir "PseudoNoteExtended.py") -Destination $IdaPlugins
+        
+        $TargetPkg = Join-Path $IdaPlugins "pseudonote_extended"
+        if (Test-Path $TargetPkg) { Remove-Item -Recurse -Force $TargetPkg }
+        
+        # PowerShell Copy-Item -Recurse copies the folder itself into the destination, so destination should be $IdaPlugins
+        Copy-Item -Recurse -Force (Join-Path $SourceDir "pseudonote_extended") -Destination $IdaPlugins
+    } finally {
+        Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
+    }
 }
 
 Write-Host "[*] Installation completed successfully."

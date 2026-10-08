@@ -52,6 +52,41 @@ The local installer dynamically resolves the target directory, prioritizing `%ID
 install.bat "C:\Path\To\IDA\plugins"
 ```
 
+### Manual Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/fareedfauzi/PseudoNote-Extended.git
+cd PseudoNote-Extended
+```
+
+Copy the plugin entry file and package directory into your IDA user plugins folder:
+
+```text
+PseudoNoteExtended.py
+pseudonote_extended/
+```
+
+Default plugin folders:
+
+```text
+Windows: %APPDATA%\Hex-Rays\IDA Pro\plugins
+Linux:   ~/.idapro/plugins
+macOS:   ~/Library/Application Support/Hex-Rays/IDA Pro/plugins
+```
+
+If you configured `IDAUSR`, copy both items into `IDAUSR/plugins` instead.
+
+Windows PowerShell example:
+
+```powershell
+$Plugins = "$env:APPDATA\Hex-Rays\IDA Pro\plugins"
+New-Item -ItemType Directory -Force -Path $Plugins | Out-Null
+Copy-Item -Force .\PseudoNoteExtended.py $Plugins
+Copy-Item -Recurse -Force .\pseudonote_extended $Plugins
+```
+
 ### Linux and macOS Environments
 
 **Quick Install (Shell):**
@@ -66,6 +101,24 @@ sh install.sh
 ```
 
 The local script respects the `$IDAUSR` environment variable. Default fallbacks are `~/.idapro/plugins` (Linux) and `~/Library/Application Support/Hex-Rays/IDA Pro/plugins` (macOS).
+
+Linux example:
+
+```sh
+mkdir -p ~/.idapro/plugins
+cp -f PseudoNoteExtended.py ~/.idapro/plugins/
+rm -rf ~/.idapro/plugins/pseudonote_extended
+cp -R pseudonote_extended ~/.idapro/plugins/
+```
+
+macOS example:
+
+```sh
+mkdir -p "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins"
+cp -f PseudoNoteExtended.py "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/"
+rm -rf "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/pseudonote_extended"
+cp -R pseudonote_extended "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/"
+```
 
 **Ensure IDA Pro is restarted following a successful installation.**
 

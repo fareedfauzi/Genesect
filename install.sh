@@ -37,7 +37,7 @@ if [ -f "$SCRIPT_DIR/PseudoNoteExtended.py" ] && [ -d "$SCRIPT_DIR/pseudonote_ex
     rm -rf "$IDA_PLUGINS/pseudonote_extended"
     cp -R "$SCRIPT_DIR/pseudonote_extended" "$IDA_PLUGINS/"
 else
-    echo "[*] Remote installation detected. Downloading latest version from GitHub..."
+    echo "[*] Remote installation detected. Downloading latest release from GitHub..."
     if ! command -v curl >/dev/null 2>&1; then
         echo "ERROR: curl is required for remote installation." >&2
         exit 1
@@ -48,14 +48,41 @@ else
     fi
 
     TMP_DIR=$(mktemp -d)
-    curl -fsSL https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip -o "$TMP_DIR/main.zip"
-    unzip -q "$TMP_DIR/main.zip" -d "$TMP_DIR"
+    trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
+
+    ZIP_PATH="$TMP_DIR/PseudoNote-Extended.zip"
+    RELEASE_URL="https://github.com/fareedfauzi/PseudoNote-Extended/releases/latest/download/PseudoNote-Extended.zip"
+    FALLBACK_URL="https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip"
+    if ! curl -fsSL "$RELEASE_URL" -o "$ZIP_PATH"; then
+        echo "[!] Release zip unavailable. Falling back to source archive..."
+        curl -fsSL "$FALLBACK_URL" -o "$ZIP_PATH"
+    fi
+
+    unzip -q "$ZIP_PATH" -d "$TMP_DIR"
+
+    EXTRACTED_DIR=""
+    if [ -f "$TMP_DIR/PseudoNoteExtended.py" ] && [ -d "$TMP_DIR/pseudonote_extended" ]; then
+        EXTRACTED_DIR="$TMP_DIR"
+    else
+        EXTRACTED_DIR=$(find "$TMP_DIR" -type d -exec sh -c '
+            for dir do
+                if [ -f "$dir/PseudoNoteExtended.py" ] && [ -d "$dir/pseudonote_extended" ]; then
+                    printf "%s\n" "$dir"
+                    exit 0
+                fi
+            done
+            exit 1
+        ' sh {} + | sed -n '1p') || true
+    fi
+
+    if [ -z "$EXTRACTED_DIR" ]; then
+        echo "ERROR: Downloaded archive does not contain PseudoNoteExtended.py and pseudonote_extended." >&2
+        exit 1
+    fi
     
-    cp -f "$TMP_DIR/PseudoNote-Extended-main/PseudoNoteExtended.py" "$IDA_PLUGINS/"
+    cp -f "$EXTRACTED_DIR/PseudoNoteExtended.py" "$IDA_PLUGINS/"
     rm -rf "$IDA_PLUGINS/pseudonote_extended"
-    cp -R "$TMP_DIR/PseudoNote-Extended-main/pseudonote_extended" "$IDA_PLUGINS/"
-    
-    rm -rf "$TMP_DIR"
+    cp -R "$EXTRACTED_DIR/pseudonote_extended" "$IDA_PLUGINS/"
 fi
 
 echo "[*] Installation completed successfully."

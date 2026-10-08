@@ -44,9 +44,46 @@ irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/insta
 curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
 ```
 
-*(If you prefer to install manually from a local clone, just run `install.bat` or `sh install.sh` directly from the repo).*
+**Manual Install:**
+
+Clone the repository:
+
+```bash
+git clone https://github.com/fareedfauzi/PseudoNote-Extended.git
+cd PseudoNote-Extended
+```
+
+Copy these into your IDA user plugins folder:
+
+```text
+PseudoNoteExtended.py
+pseudonote_extended/
+```
+
+Common IDA user plugin folders:
+
+```text
+Windows: %APPDATA%\Hex-Rays\IDA Pro\plugins
+Linux:   ~/.idapro/plugins
+macOS:   ~/Library/Application Support/Hex-Rays/IDA Pro/plugins
+```
+
+If you use a custom `IDAUSR`, copy them into `IDAUSR/plugins` instead.
+
+*(If you prefer a local installer from a clone, run `install.bat` on Windows or `sh install.sh` on Linux/macOS).*
 
 Restart IDA Pro once it's done!
+
+## Release ZIP
+
+Build the GitHub Releases asset locally with:
+
+```bash
+python tools/build_release.py
+python tools/verify_release.py
+```
+
+Upload `dist/PseudoNote-Extended.zip` to the latest GitHub release. The quick installers try that small release ZIP first and fall back to GitHub's source archive if no release asset is available.
 
 ## Configuration
 

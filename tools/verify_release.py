@@ -22,5 +22,5 @@ def verify(path):
 
 
 if __name__ == "__main__":
-    target = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "dist/PseudoNote-Extended-1.0.0.zip")
+    target = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "dist/PseudoNote-Extended.zip")
     raise SystemExit(verify(target))
