@@ -64,8 +64,6 @@ Want to dig deeper? Check out the [`docs/`](docs/) folder for all the details:
 * [**Utilities & Explorers**](docs/utilities.md) - Guides on the Hex Viewer, Call Tree, and malware explorers.
 * [**Analysis Pipelines**](docs/pipelines.md) - Under the hood of the Deep & Bulk Analyzers.
 
-## A Note on Safety
-
-By default, the AI starts in read-only mode. We made sure that any IDB-altering actions (like renaming symbols or adding comments) require your explicit approval first.
-
-*Always remember: AI outputs are educated guesses. Trust, but verify against the actual assembly.*
+## Credit
+- Codex
+- Rohitab Batra for the Windows API dictionary
