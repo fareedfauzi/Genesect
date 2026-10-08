@@ -46,7 +46,7 @@ An interactive, lazily-loaded hierarchical visualization interface for navigatin
 *   **Thread Explorer:** Maps thread-creation APIs, recovered entry points, APC scheduling, completion queues, and explicit message activity.
 *   **Entry-Point Explorer:** Enumerates PE entry points, exported functions, TLS callbacks, and constructor arrays for rapid initial triage.
 
-## Threat Intelligence & Malware Explorers
+## Malware Analysis Explorers
 
 PseudoNote Extended includes specialized heuristic engines designed to accelerate malware triage.
 
