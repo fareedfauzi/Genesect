@@ -74,18 +74,6 @@ If you use a custom `IDAUSR`, copy them into `IDAUSR/plugins` instead.
 
 Restart IDA Pro once it's done!
 
-<<<<<<< HEAD
-## Release ZIP
-
-Build the GitHub Releases asset locally with:
-
-```bash
-python tools/build_release.py
-python tools/verify_release.py
-```
-
-=======
->>>>>>> ff3f1d7e6e9d2d235d5a00852d62daa02733b3a8
 ## Configuration
 
 To hook up your API keys, just right-click anywhere in the Pseudocode or IDA-View windows and hit **PseudoNote > Settings**.
