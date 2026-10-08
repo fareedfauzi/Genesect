@@ -4,7 +4,9 @@ The utilities detailed in this document are accessible via **Right-Click > Pseud
 
 ## Navigational Aids and Visualizations
 
-### Hex Viewer (`Ctrl+Alt+B`)
+### Hex Viewer
+
+<img width="903" height="871" alt="image" src="https://github.com/user-attachments/assets/61fd5e42-c283-4c25-af74-a4b832b3dec0" />
 
 A specialized, dockable hexadecimal editor optimized for binary analysis within the IDA environment.
 
@@ -12,7 +14,9 @@ A specialized, dockable hexadecimal editor optimized for binary analysis within 
 *   **Data Annotation:** Supports persistent, color-coded highlighting of specific byte ranges for structural annotation.
 *   **Format Adaptation:** Dynamically adapts to the active IDA color palette (light or dark mode).
 
-### Toggle Call Highlight (`Ctrl+Alt+H`)
+### Toggle Call Highlight
+
+<img width="1360" height="649" alt="image" src="https://github.com/user-attachments/assets/7f88e086-dcf3-439b-ad28-6a29f5bcf8a9" />
 
 Visual differentiation of function calls within the analysis environment.
 
@@ -20,17 +24,34 @@ Visual differentiation of function calls within the analysis environment.
 *   **Disassembly Highlighting:** Visually isolates `call` and `jmp` instructions.
 *   **State Tracking:** Distinguishes between resolved (renamed) functions and unresolved (`sub_`) stubs.
 
-### Toggle Indent Marks (`Ctrl+Alt+I`)
+### Toggle Indent Marks
+
+<img width="837" height="572" alt="image" src="https://github.com/user-attachments/assets/c107770a-b49a-4a21-a452-79fb05f1f5a5" />
 
 Visually renders vertical indent guidelines within the pseudocode view to easily track nested loops and conditional branches. Configurable via Settings.
 
-### Zoom Views (`Ctrl+Wheel`)
+### Zoom Views
+
+<img width="1296" height="829" alt="image" src="https://github.com/user-attachments/assets/1d6cf48e-2fe8-4a69-af3a-a6a2c081a070" />
+
+<img width="611" height="645" alt="image" src="https://github.com/user-attachments/assets/572ba097-2186-45bb-b7d7-66c4de0c51fc" />
 
 Allows dynamic font scaling of the Hex-Rays pseudocode, disassembly, and native PseudoNote interfaces by holding `Ctrl` and scrolling the mouse wheel.
 
+### Folded Pseudocode
+
+<img width="756" height="290" alt="image" src="https://github.com/user-attachments/assets/f2e57929-17f4-40b5-ae47-15c9ced45720" />
+
+### Display function argument (WinAPI)
+
+<img width="958" height="478" alt="image" src="https://github.com/user-attachments/assets/0cb14b3b-d4c8-418e-a5b4-7ec2b6c557b4" />
+
+
 ## Program Structure Analysis
 
-### Call Tree (`Ctrl+Alt+X`)
+### Call Tree
+
+<img width="597" height="632" alt="image" src="https://github.com/user-attachments/assets/a713fe28-2251-4f5c-8f33-6b4733ae8ce0" />
 
 An interactive, lazily-loaded hierarchical visualization interface for navigating code cross-references.
 
@@ -45,6 +66,13 @@ An interactive, lazily-loaded hierarchical visualization interface for navigatin
 *   **Callback Explorer:** Locates function pointer assignments, dispatch tables, and indirect execution transfers.
 *   **Thread Explorer:** Maps thread-creation APIs, recovered entry points, APC scheduling, completion queues, and explicit message activity.
 *   **Entry-Point Explorer:** Enumerates PE entry points, exported functions, TLS callbacks, and constructor arrays for rapid initial triage.
+
+<img width="1533" height="709" alt="image" src="https://github.com/user-attachments/assets/19ca8327-e0a5-4021-97d5-a8773a10ff45" />
+
+<img width="1524" height="686" alt="image" src="https://github.com/user-attachments/assets/b35ff0a6-035b-4743-b6d8-dbb6d87b07da" />
+
+<img width="1524" height="675" alt="image" src="https://github.com/user-attachments/assets/f87d2fec-2c72-4ace-a585-50cc87f40a18" />
+
 
 ## Malware Analysis Explorers
 
