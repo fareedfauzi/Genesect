@@ -9,3 +9,5 @@ PseudoNoteExtended.ini
 .idea/
 .vscode/
 dist/
+install_pseudonote_extended_ida83.bat
+install_pseudonote_extended_ida93.bat
