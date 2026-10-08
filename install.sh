@@ -51,8 +51,17 @@ else
     trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
     ZIP_PATH="$TMP_DIR/PseudoNote-Extended.zip"
-    RELEASE_URL="https://github.com/fareedfauzi/PseudoNote-Extended/releases/latest/download/PseudoNote-Extended.zip"
+    RELEASE_API="https://api.github.com/repos/fareedfauzi/PseudoNote-Extended/releases/latest"
     FALLBACK_URL="https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip"
+    RELEASE_URL=$(curl -fsSL "$RELEASE_API" |
+        sed -n 's/.*"browser_download_url": "\(https:[^"]*\/PseudoNote-Extended[^"]*\.zip\)".*/\1/p' |
+        sed -n '1p') || true
+
+    if [ -z "$RELEASE_URL" ]; then
+        RELEASE_URL="https://github.com/fareedfauzi/PseudoNote-Extended/releases/latest/download/PseudoNote-Extended.zip"
+    fi
+
+    echo "[*] Downloading release asset: $RELEASE_URL"
     if ! curl -fsSL "$RELEASE_URL" -o "$ZIP_PATH"; then
         echo "[!] Release zip unavailable. Falling back to source archive..."
         curl -fsSL "$FALLBACK_URL" -o "$ZIP_PATH"

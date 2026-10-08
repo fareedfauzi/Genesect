@@ -594,7 +594,8 @@ class SimpleAI:
                 safe_execute(_final_call)
             except Exception as e:
                 LOGGER.log(f"AI Error ({self.provider}): {e}")
-                err_str = str(e).lower()
+                error_msg = str(e)
+                err_str = error_msg.lower()
                 is_throttle = any(x in err_str for x in ["429", "too many requests", "quota", "rate limit"])
                 output_message = _format_provider_error(
                     self.profile.name,
@@ -607,7 +608,7 @@ class SimpleAI:
                 def _do_err():
                     invoke_callback(
                         response=None,
-                        error_msg=str(e),
+                        error_msg=error_msg,
                         is_throttle=is_throttle,
                         request_id=request_id,
                     )

@@ -1408,6 +1408,7 @@ class BulkRenamer(QDialog):
         d = SettingsDialog(self.pn_config, self, hide_extra_tabs=True, mode='renamer')
         if d.exec_():
             CONFIG.reload()
+            _ai_mod.reload_ai_client(CONFIG)
             # Refresh local config from updated pn_config
             self.cfg = self.build_cfg(self.pn_config)
             

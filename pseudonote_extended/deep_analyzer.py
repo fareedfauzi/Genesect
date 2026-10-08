@@ -4718,6 +4718,7 @@ class DeepAnalyzerSettingsDialog(QDialog):
         
 
         CONFIG.save()
+        _ai_mod.reload_ai_client(CONFIG)
 
 
 class DeepAnalyzerDialog(QDialog):
@@ -6020,7 +6021,8 @@ class DeepAnalyzerDialog(QDialog):
                     
                     _ida.execute_sync(lambda: self.on_func_updated(ea, node.name, node.name, result.get("confidence", 0)), _ida.MFF_WRITE)
                 except Exception as ex:
-                    _ida.execute_sync(lambda: self.on_log(f"Re-analyze error: {ex}", "err"), _ida.MFF_WRITE)
+                    error_msg = str(ex)
+                    _ida.execute_sync(lambda: self.on_log(f"Re-analyze error: {error_msg}", "err"), _ida.MFF_WRITE)
             threading.Thread(target=_run, daemon=True).start()
         reanalyze_action.triggered.connect(do_reanalyze)
 

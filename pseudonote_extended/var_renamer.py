@@ -1328,6 +1328,7 @@ class BulkVariableRenamer(QDialog):
         d = SettingsDialog(self.pn_config, self, hide_extra_tabs=True, mode='var_renamer')
         if d.exec_():
             CONFIG.reload()
+            _ai_mod.reload_ai_client(CONFIG)
 
     def _make_fdata(self, ea, name):
         """Create a FuncData with persistent rename state check."""

@@ -30,6 +30,7 @@ import io
 import json
 
 from pseudonote_extended.qt_compat import QtWidgets, QtCore, QtGui
+from pseudonote_extended.config import CONFIG
 import pseudonote_extended.ai_client as _ai_mod
 import pseudonote_extended.idb_storage as _idb_mod
 from pseudonote_extended.idb_storage import save_to_idb, load_from_idb

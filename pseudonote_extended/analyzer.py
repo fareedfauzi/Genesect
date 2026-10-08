@@ -1101,6 +1101,7 @@ class BulkAnalyzer(QDialog):
         d = SettingsDialog(self.pn_config, self, hide_extra_tabs=True, mode='analyzer')
         if d.exec_():
             CONFIG.reload()
+            _ai_mod.reload_ai_client(CONFIG)
 
     def add_log(self, msg, lv='info'):
         color = '#D4D4D4'

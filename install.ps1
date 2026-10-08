@@ -58,6 +58,20 @@ function Get-InstallerScriptDir {
     return $null
 }
 
+function Get-LatestReleaseZipUri {
+    $ApiUri = "https://api.github.com/repos/fareedfauzi/PseudoNote-Extended/releases/latest"
+    $Release = Invoke-RestMethod -Uri $ApiUri -Headers @{ "User-Agent" = "PseudoNote-Extended-Installer" } -ErrorAction Stop
+    $Asset = $Release.assets |
+        Where-Object { $_.name -match '^PseudoNote-Extended(?:-[0-9][A-Za-z0-9._-]*)?\.zip$' } |
+        Select-Object -First 1
+
+    if ($Asset -and $Asset.browser_download_url) {
+        return $Asset.browser_download_url
+    }
+
+    return $null
+}
+
 $ScriptDir = Get-InstallerScriptDir
 
 if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -and (Test-Path (Join-Path $ScriptDir "pseudonote_extended"))) {
@@ -74,13 +88,17 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -
     
     try {
         $ZipPath = Join-Path $TmpDir "PseudoNote-Extended.zip"
-        $ReleaseUri = "https://github.com/fareedfauzi/PseudoNote-Extended/releases/latest/download/PseudoNote-Extended.zip"
         $FallbackUri = "https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip"
 
         $OldProgressPreference = $ProgressPreference
         $ProgressPreference = "SilentlyContinue"
         try {
             try {
+                $ReleaseUri = Get-LatestReleaseZipUri
+                if (-not $ReleaseUri) {
+                    throw "No PseudoNote Extended release zip asset found."
+                }
+                Write-Host "[*] Downloading release asset: $ReleaseUri"
                 Invoke-WebRequest -Uri $ReleaseUri -OutFile $ZipPath -ErrorAction Stop
             } catch {
                 Write-Host "[!] Release zip unavailable. Falling back to source archive..."
