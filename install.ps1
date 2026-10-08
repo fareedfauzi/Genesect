@@ -33,7 +33,32 @@ foreach ($File in $OldFiles) {
     }
 }
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition -ErrorAction SilentlyContinue
+function Get-InstallerScriptDir {
+    $Candidates = @(
+        $PSScriptRoot,
+        $PSCommandPath,
+        $MyInvocation.MyCommand.Path,
+        $MyInvocation.MyCommand.Definition
+    )
+
+    foreach ($Candidate in $Candidates) {
+        if ([string]::IsNullOrWhiteSpace($Candidate)) {
+            continue
+        }
+
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf -ErrorAction SilentlyContinue) {
+            $Candidate = Split-Path -Parent $Candidate
+        }
+
+        if (Test-Path -LiteralPath $Candidate -PathType Container -ErrorAction SilentlyContinue) {
+            return (Resolve-Path -LiteralPath $Candidate).Path
+        }
+    }
+
+    return $null
+}
+
+$ScriptDir = Get-InstallerScriptDir
 
 if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -and (Test-Path (Join-Path $ScriptDir "pseudonote_extended"))) {
     Write-Host "[*] Local installation detected."
