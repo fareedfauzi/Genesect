@@ -63,10 +63,10 @@ function Get-InstallerScriptDir {
 }
 
 function Get-LatestReleaseZipUri {
-    $ApiUri = "https://api.github.com/repos/fareedfauzi/Genesect-Extended/releases/latest"
-    $Release = Invoke-RestMethod -Uri $ApiUri -Headers @{ "User-Agent" = "Genesect-Extended-Installer" } -ErrorAction Stop
+    $ApiUri = "https://api.github.com/repos/fareedfauzi/Genesect/releases/latest"
+    $Release = Invoke-RestMethod -Uri $ApiUri -Headers @{ "User-Agent" = "Genesect-Installer" } -ErrorAction Stop
     $Asset = $Release.assets |
-        Where-Object { $_.name -match '^Genesect-Extended(?:-[0-9][A-Za-z0-9._-]*)?\.zip$' } |
+        Where-Object { $_.name -match '^Genesect(?:-[0-9][A-Za-z0-9._-]*)?\.zip$' } |
         Select-Object -First 1
 
     if ($Asset -and $Asset.browser_download_url) {
@@ -91,8 +91,8 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "Genesect.py")) -and (Test-
     New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
     
     try {
-        $ZipPath = Join-Path $TmpDir "Genesect-Extended.zip"
-        $FallbackUri = "https://github.com/fareedfauzi/Genesect-Extended/archive/refs/heads/main.zip"
+        $ZipPath = Join-Path $TmpDir "Genesect.zip"
+        $FallbackUri = "https://github.com/fareedfauzi/Genesect/archive/refs/heads/main.zip"
 
         $OldProgressPreference = $ProgressPreference
         $ProgressPreference = "SilentlyContinue"

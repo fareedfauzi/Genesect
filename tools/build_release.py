@@ -10,7 +10,7 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-DEFAULT_ARCHIVE_NAME = "Genesect-Extended.zip"
+DEFAULT_ARCHIVE_NAME = "Genesect.zip"
 REQUIRED_FILES = (
     "Genesect.py",
 )
@@ -62,7 +62,7 @@ def build(version=None):
     version = version or metadata_version()
     DIST.mkdir(exist_ok=True)
     archive = DIST / DEFAULT_ARCHIVE_NAME
-    versioned_archive = DIST / f"Genesect-Extended-{version}.zip"
+    versioned_archive = DIST / f"Genesect-{version}.zip"
     files = release_files()
     manifest = {
         "name": "Genesect",

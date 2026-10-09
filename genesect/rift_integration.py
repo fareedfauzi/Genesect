@@ -41,7 +41,7 @@ def _normalize_server_url(url):
 def _request_json(method, server_url, path, payload=None, timeout=15):
     url = _normalize_server_url(server_url) + path
     data = None
-    headers = {"User-Agent": "Genesect-Extended"}
+    headers = {"User-Agent": "Genesect"}
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"

@@ -54,15 +54,15 @@ else
     TMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-    ZIP_PATH="$TMP_DIR/Genesect-Extended.zip"
-    RELEASE_API="https://api.github.com/repos/fareedfauzi/Genesect-Extended/releases/latest"
-    FALLBACK_URL="https://github.com/fareedfauzi/Genesect-Extended/archive/refs/heads/main.zip"
+    ZIP_PATH="$TMP_DIR/Genesect.zip"
+    RELEASE_API="https://api.github.com/repos/fareedfauzi/Genesect/releases/latest"
+    FALLBACK_URL="https://github.com/fareedfauzi/Genesect/archive/refs/heads/main.zip"
     RELEASE_URL=$(curl -fsSL "$RELEASE_API" |
-        sed -n 's/.*"browser_download_url": "\(https:[^"]*\/Genesect-Extended[^"]*\.zip\)".*/\1/p' |
+        sed -n 's/.*"browser_download_url": "\(https:[^"]*\/Genesect[^"]*\.zip\)".*/\1/p' |
         sed -n '1p') || true
 
     if [ -z "$RELEASE_URL" ]; then
-        RELEASE_URL="https://github.com/fareedfauzi/Genesect-Extended/releases/latest/download/Genesect-Extended.zip"
+        RELEASE_URL="https://github.com/fareedfauzi/Genesect/releases/latest/download/Genesect.zip"
     fi
 
     echo "[*] Downloading release asset: $RELEASE_URL"

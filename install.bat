@@ -39,7 +39,7 @@ if exist "%USERPROFILE%\.%LEGACY_BASE%.ini" del /F /Q "%USERPROFILE%\.%LEGACY_BA
 if not exist "%SOURCE_ENTRY%" (
     echo ERROR: Cannot find local Genesect.py.
     echo Please use install.ps1 for remote installation:
-    echo irm https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.ps1 ^| iex
+    echo irm https://raw.githubusercontent.com/fareedfauzi/Genesect/main/install.ps1 ^| iex
     exit /b 1
 )
 

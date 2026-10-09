@@ -4,6 +4,8 @@
 
 Genesect is an IDA Pro plugin for practical reverse engineering and malware analysis. It takes the grunt work out of reverse engineering by integrating Large Language Models (LLMs) directly into IDA Pro and the Hex-Rays decompiler. It assists analysts with tasks such as renaming functions and variables, explaining complex or obscure code, recovering structures, and generating comprehensive analysis reports.
 
+Genesect is the upgraded successor to [fareedfauzi/PseudoNote](https://github.com/fareedfauzi/PseudoNote), which is now archived and kept for reference only.
+
 Inspired by the Gepetto IDA plugin, Genesect takes the concept further - essentially Gepetto on steroids - with additional capabilities designed for practical malware analysis and large-scale reverse engineering.
 
 Whether you're triaging a massive binary or performing a deep dive into a specific execution chain, Genesect provides an interactive, AI-assisted workflow directly inside your IDA Pro workspace.
@@ -35,13 +37,13 @@ pip install openai httpx PySide6
 **Quick Install (Windows):**
 
 ```powershell
-irm https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/fareedfauzi/Genesect/main/install.ps1 | iex
 ```
 
 **Quick Install (Linux / macOS):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect/main/install.sh | bash
 ```
 
 **Manual Install:**
@@ -49,8 +51,8 @@ curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/
 Clone the repository:
 
 ```bash
-git clone https://github.com/fareedfauzi/Genesect-Extended.git
-cd Genesect-Extended
+git clone https://github.com/fareedfauzi/Genesect.git
+cd Genesect
 ```
 
 Copy these into your IDA user plugins folder:

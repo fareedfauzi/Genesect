@@ -136,7 +136,7 @@ def _select_release_asset(release):
 
 
 def _download(url, destination):
-    request = urllib.request.Request(url, headers={"User-Agent": "Genesect-Extended"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Genesect"})
     with urllib.request.urlopen(request, timeout=60) as response, open(destination, "wb") as stream:
         shutil.copyfileobj(response, stream)
 

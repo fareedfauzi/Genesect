@@ -37,7 +37,7 @@ sudo apt install python3-httpx python3-openai python3-pyside6.qtcore python3-pys
 
 **Quick Install (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/fareedfauzi/Genesect/main/install.ps1 | iex
 ```
 
 Alternatively, to install from a local repository clone, navigate to the project directory and execute the batch installer:
@@ -57,8 +57,8 @@ install.bat "C:\Path\To\IDA\plugins"
 Clone the repository:
 
 ```bash
-git clone https://github.com/fareedfauzi/Genesect-Extended.git
-cd Genesect-Extended
+git clone https://github.com/fareedfauzi/Genesect.git
+cd Genesect
 ```
 
 Copy the plugin entry file and package directory into your IDA user plugins folder:
@@ -91,7 +91,7 @@ Copy-Item -Recurse -Force .\genesect $Plugins
 
 **Quick Install (Shell):**
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect/main/install.sh | bash
 ```
 
 Alternatively, to install from a local repository clone, execute the shell installer script:
