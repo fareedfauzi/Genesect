@@ -6,7 +6,7 @@ Genesect is an IDA Pro plugin for practical reverse engineering and malware anal
 
 Genesect is the upgraded successor to [fareedfauzi/PseudoNote](https://github.com/fareedfauzi/PseudoNote), which is now archived and kept for reference only.
 
-Inspired by the Gepetto IDA plugin, Genesect takes the concept further - essentially Gepetto on steroids - with additional capabilities designed for practical malware analysis and large-scale reverse engineering.
+Inspired by the Gepetto IDA plugin, Genesect extends that workflow with practical malware-analysis, batch-processing, and modern language triage features for large reverse-engineering projects.
 
 Whether you're triaging a massive binary or performing a deep dive into a specific execution chain, Genesect provides an interactive, AI-assisted workflow directly inside your IDA Pro workspace.
 
@@ -16,7 +16,8 @@ Whether you're triaging a massive binary or performing a deep dive into a specif
 * **Deep Analysis Pipeline:** Point it at an entry function and let it recursively build a call graph, rename everything bottom-up, and spit out a beautiful HTML report.
 * **Bulk Processing Engine:** Feed it hundreds of unnamed functions or variables and let it batch-rename them based on behavioral heuristics.
 * **Contextual AI Chat:** A dockable chat interface that actually understands the function you're currently looking at.
-* **Tons of Explorers:** Dedicated static analysis utilities for spotting anti-analysis tricks, process injection, dynamic API resolution, crypto routines, and more.
+* **Go and Rust Triage:** GoReSym integration, Go package organization, Go/Rust user-code mapping, Rust binary triage, Rust symbol demangling, Rust string display fixups, and optional RIFT library signature workflows.
+* **Malware Analysis Explorers:** Dedicated static analysis utilities for spotting anti-analysis tricks, process injection, dynamic API resolution, crypto routines, callback dispatch, COM usage, C2/protocol behavior, and more.
 
 ## Installation
 
@@ -30,7 +31,7 @@ You'll need a few Python packages installed in whatever Python environment IDA i
 pip install openai httpx PySide6
 ```
 
-*(Optional: Install `anthropic` and `google-generativeai` if you want Claude or Gemini support).*
+*(Optional: Install `anthropic` and `google-generativeai` if you want Claude or Gemini support. FLOSS, GoReSym, rustfilt, and RIFT are optional external tools used only by their matching utilities.)*
 
 ### 2. Install the Plugin
 
@@ -89,7 +90,7 @@ Want to dig deeper? Check out the [`docs/`](docs/) folder for all the details:
 * [**Getting Started**](docs/getting-started.md) - Full installation steps, troubleshooting, and IDB migration.
 * [**Features & Hotkeys**](docs/features-overview.md) - A cheat sheet of every action and shortcut.
 * [**AI Assistant Workflows**](docs/ai-assistant.md) - How to use the chat, autonomous agent, and bulk renamers.
-* [**Utilities & Explorers**](docs/utilities.md) - Guides on the Hex Viewer, Call Tree, and malware explorers.
+* [**Utilities & Explorers**](docs/utilities.md) - Guides on the Hex Viewer, Call Tree, Go/Rust workflows, malware explorers, and external pivots.
 * [**Analysis Pipelines**](docs/pipelines.md) - Under the hood of the Deep & Bulk Analyzers.
 
 ## Credit

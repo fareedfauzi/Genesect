@@ -24,6 +24,7 @@ The toolset is categorized into four primary domains: Settings, AI Assistant, Ut
 
 4. [**Utilities & Explorers**](utilities.md)
    - Navigational aids including the Hex Viewer and Call Tree
+   - Go and Rust workflows including GoReSym, user-code mapping, Rust triage, and RIFT
    - Structural and malware-specific static analysis explorers
    - Signature generation and external pivoting utilities
 
@@ -37,13 +38,14 @@ The toolset is categorized into four primary domains: Settings, AI Assistant, Ut
 2. Ensure the AI provider is properly configured and tested via the Settings menu prior to analysis.
 3. Utilize the Chat interface or Autonomous Investigation for preliminary triage of complex functions.
 4. Maintain a read-only stance for all AI-driven tools until the generated proposals (names, types, comments) have been manually reviewed.
-5. Utilize the built-in Change History and Undo Explorer to manage and revert modifications to the IDB.
+5. Use the Bulk Function Renamer's **Undo Renames** control, **Remove Comments** actions, and **Comment Explorer** to review or revert Genesect-managed IDB changes.
 
 ## Security Model & Data Integrity
 
 - **Validation Requirement:** All AI-generated outputs are heuristic proposals. They must be validated against the underlying assembly, cross-references, and runtime data before acceptance.
 - **Explicit Modification:** Autonomous agents and batch processors operate in a read-only capacity by default. State mutations within the IDB require explicit configuration and analyst review.
 - **External Communications:** Search pivots and external querying tools transmit selected data to third-party services. Analysts must verify that selected data does not violate operational security policies prior to transmission.
+- **External Services:** RIFT runs as a separate local server because it needs Rust toolchains and signature-generation dependencies that should stay isolated from IDA.
 - **Static Analysis Constraints:** Features such as shellcode analysis and string/byte inspection operate purely via static analysis and do not execute code on the host system.
 
 ## Terminology Reference

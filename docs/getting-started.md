@@ -12,6 +12,13 @@ pip install openai httpx PySide6
 
 *(Optional: Install `anthropic` and `google-generativeai` to enable support for Claude and Google Gemini API endpoints).*
 
+Optional external reversing tools are only needed when you use their matching utilities:
+
+* `floss` for **Utilities > Search & Data > Discover Strings with FLOSS**.
+* `GoReSym` for **Utilities > GoLang > GoReSym**. Genesect can download a matching release when one is not configured.
+* `rustfilt` for broader Rust symbol demangling coverage. Genesect also includes a built-in demangler for common legacy symbols.
+* Microsoft RIFT for **Utilities > Rust > RIFT Library Recognition**. RIFT runs outside IDA as a local service and should be set up in an isolated analysis VM.
+
 ### Linux Environment Considerations
 
 IDA Pro natively utilizes the system-wide Python environment. Modern Linux distributions (e.g., Debian 12+, Ubuntu 23.04+) enforce PEP 668, blocking system-wide `pip` installations to prevent package manager conflicts.
@@ -140,13 +147,13 @@ Additional configuration tabs dictate UI rendering (fonts, syntax highlighting),
 
 ### Readable Code Reconstruction
 
-Navigate to a target function and invoke **AI Assistant > Analyst Notes > Open Readable Code**.
+Navigate to a target function and invoke **Genesect > Open Readable Code**.
 
 This interface facilitates the generation of high-level, human-readable C (or other targeted languages) via AI-driven reconstruction of the Hex-Rays pseudocode. The generated code is persistently stored within the IDB and serves as an analytical aid.
 
 ### Analyst Documentation
 
-Invoke **Open Analyst Notes** to instantiate a per-function Markdown editor.
+Invoke **Genesect > Open Analyst Notes** to instantiate a per-function Markdown editor.
 
 This facility allows analysts to document hypotheses, record Indicators of Compromise (IOCs), and maintain contextual notes directly tied to the function's address within the IDB. The interface supports standard Markdown formatting and live preview rendering.
 
@@ -160,5 +167,5 @@ For users migrating from an older installation, execute the **Migrate Legacy Dat
 
 1. Ensure the IDB is backed up prior to execution.
 2. Review the enumerated legacy artifacts.
-3. Initiate the migration sequence to transfer data into the Extended namespace.
+3. Initiate the migration sequence to transfer data into Genesect storage.
 4. Verify the integrity of the migrated readable code and notes within the new workspace interfaces.
