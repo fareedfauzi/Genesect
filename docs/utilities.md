@@ -96,6 +96,27 @@ Provides native execution and parsing of the FireEye Labs Obfuscated String Solv
 2. Execute the string discovery protocol.
 3. The resulting stack-strings, tight-strings, and decoded strings are rendered in a persistent, sortable IDA Chooser.
 
+### GoReSym Integration
+
+Runs Mandiant GoReSym from **Utilities > GoLang > GoReSym** to recover Go runtime names and type metadata.
+
+1. Select an existing GoReSym binary, make it available in `$PATH`, or let PseudoNote download the latest platform release.
+2. PseudoNote locates the opened sample automatically, or prompts you to select it when the original file is missing.
+3. The JSON output is saved beside the IDB and applied to the database using the GoReSym rename workflow. Reconstructed C type declarations are skipped by default to avoid noisy IDA parser failures; set `PSEUDONOTE_GORESYM_PARSE_TYPES=1` only when you explicitly want to experiment with type import.
+
+### Go Package Organizer
+
+Creates Go-focused folders in IDA's function tree, grouping functions under `Go/User`, `Go/ThirdParty`, `Go/Standard`, `Go/Runtime`, and `Go/Uncategorized` when IDA's function folder API is available.
+
+### Rust Binary Analysis
+
+Adds Rust-focused triage under **Utilities > Rust** based on JPCERT/CC's Rust reverse-engineering research.
+
+*   **Rust Binary Triage:** Scores the IDB using Rust panic/backtrace strings, size-minimized Rust indicators, mangled symbol patterns, runtime/library names, panic-related evidence, and Rust source/crate path strings. The detailed report highlights likely crate/version paths, main-function leads around `lang_start_internal`, and follow-up analysis steps.
+*   **Display Rust Strings:** Applies a Hex-Rays display hook that renders recognized Rust string literals inline in pseudocode instead of leaving opaque data-object references on screen. The hook is toggleable and only runs when the IDB looks Rust-related.
+*   **Demangle Rust Symbols:** Renames Rust-looking function symbols using a built-in legacy demangler, with optional `rustfilt` support when it is available in `$PATH` for broader symbol coverage.
+*   **RIFT Library Recognition:** Submits inferred Rust metadata to a configured Microsoft RIFT server, polls the FLIRT generation job, and optionally queues generated `.sig` files for IDA application. RIFT is an external research tool with its own dependencies (`rustup`, `cargo`, `pcf`, `sigmake`) and should be run in an isolated analysis VM.
+
 ### Static Shellcode Analysis
 
 Executes a heuristic analysis on a selected range of raw bytes to determine potential shellcode architecture, execution logic, and malicious capabilities without relying on dynamic emulation.

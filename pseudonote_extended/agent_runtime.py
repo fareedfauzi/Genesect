@@ -434,12 +434,11 @@ class AgentSession:
 
 
 def parse_agent_response(response):
-    """Parse a strict agent envelope without accepting prose as a tool call."""
+    """Parse an agent envelope, recovering valid JSON embedded after prose."""
     text = str(response or "").strip()
     # Some local/OpenAI-compatible providers echo the tail of the most recent
     # untrusted tool observation before emitting the requested JSON envelope.
-    # Recover only the content after our exact boundary marker; arbitrary prose
-    # containing JSON remains rejected by the strict parser below.
+    # Recover only the content after our exact boundary marker first.
     if "--- END DATA ---" in text:
         text = text.rsplit("--- END DATA ---", 1)[1].strip()
     if text.startswith("```json"):
@@ -447,10 +446,34 @@ def parse_agent_response(response):
         if text.endswith("```"):
             text = text[:-3]
         text = text.strip()
+    value, load_error = _load_agent_envelope_json(text)
+    if load_error:
+        return None, load_error
+    return _validate_agent_envelope(value)
+
+
+def _load_agent_envelope_json(text):
+    decoder = json.JSONDecoder()
     try:
-        value = json.loads(text)
+        return json.loads(text), ""
     except (TypeError, ValueError) as exc:
-        return None, f"invalid JSON envelope: {exc}"
+        load_error = f"invalid JSON envelope: {exc}"
+    candidates = []
+    for index, char in enumerate(str(text or "")):
+        if char != "{":
+            continue
+        try:
+            value, _end = decoder.raw_decode(text[index:])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict) and value.get("action") in {"tools", "final"}:
+            candidates.append(value)
+    if candidates:
+        return candidates[-1], ""
+    return None, load_error
+
+
+def _validate_agent_envelope(value):
     if not isinstance(value, dict):
         return None, "agent envelope must be a JSON object"
     action = value.get("action")

@@ -22,7 +22,6 @@ COMMON_GROUPS = (
         "pseudonote_extended:toggle_indent_guides", "pseudonote_extended:zoom_all_views",
     )),
     ("Utilities/Program Structure", (
-        "pseudonote_extended:decryption_workbench", "-",
         "pseudonote_extended:global_variable_explorer", "pseudonote_extended:dnspy_xrefs", "-",
         "pseudonote_extended:vftable_list", "pseudonote_extended:virtual_class_explorer",
         "pseudonote_extended:com_explorer",
@@ -40,6 +39,14 @@ COMMON_GROUPS = (
     ("Utilities/Search && Data", (
         "pseudonote_extended:regex_idb_search", "-",
         "pseudonote_extended:floss_strings", "pseudonote_extended:dump_bytes",
+    )),
+    ("Utilities/GoLang", (
+        "pseudonote_extended:goresym", "-",
+        "pseudonote_extended:go_package_organizer",
+    )),
+    ("Utilities/Rust", (
+        "pseudonote_extended:rust_triage", "pseudonote_extended:rust_string_fixups", "-",
+        "pseudonote_extended:rust_demangle", "pseudonote_extended:rift_library_recognition",
     )),
     ("Utilities/IDB Maintenance", (
         "pseudonote_extended:comment_explorer", "-",

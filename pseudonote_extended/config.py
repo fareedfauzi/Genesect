@@ -77,6 +77,7 @@ class Config:
         self.indent_guides_color = "#57CFDC"
         self.pseudocode_folding_color = "#3F3F3F"
         self.argument_name_hints_enabled = False
+        self.rust_string_fixups_enabled = True
         self.zoom_all_views_enabled = True
         self.bookmarked_actions = [
             "pseudonote_extended:ask_chat",
@@ -159,6 +160,9 @@ class Config:
         self.auto_apply_bulk = True
         self.show_pro_tip = True
         self.floss_path = ""
+        self.goresym_path = ""
+        self.rift_server_url = "http://127.0.0.1:5001"
+        self.rift_output_folder = ""
 
         self.load()
 
@@ -276,6 +280,7 @@ class Config:
             self.indent_guides_color = parser.get("Fonts", "INDENT_GUIDES_COLOR", fallback="#57CFDC")
             self.pseudocode_folding_color = parser.get("Fonts", "PSEUDOCODE_FOLDING_COLOR", fallback="#3F3F3F")
             self.argument_name_hints_enabled = parser.getboolean("Fonts", "ARGUMENT_NAME_HINTS_ENABLED", fallback=False)
+            self.rust_string_fixups_enabled = parser.getboolean("Fonts", "RUST_STRING_FIXUPS_ENABLED", fallback=True)
             self.zoom_all_views_enabled = parser.getboolean("Fonts", "ZOOM_ALL_VIEWS_ENABLED", fallback=True)
 
         if parser.has_section("UI"):
@@ -284,6 +289,9 @@ class Config:
 
         if parser.has_section("ExternalTools"):
             self.floss_path = parser.get("ExternalTools", "FLOSS_PATH", fallback="")
+            self.goresym_path = parser.get("ExternalTools", "GORESYM_PATH", fallback="")
+            self.rift_server_url = parser.get("ExternalTools", "RIFT_SERVER_URL", fallback="http://127.0.0.1:5001")
+            self.rift_output_folder = parser.get("ExternalTools", "RIFT_OUTPUT_FOLDER", fallback="")
 
         if parser.has_section("Analysis"):
             self.batch_size = parser.getint("Analysis", "BATCH_SIZE", fallback=10)
@@ -415,6 +423,9 @@ class Config:
 
         if not parser.has_section("ExternalTools"): parser.add_section("ExternalTools")
         parser.set("ExternalTools", "FLOSS_PATH", self.floss_path)
+        parser.set("ExternalTools", "GORESYM_PATH", self.goresym_path)
+        parser.set("ExternalTools", "RIFT_SERVER_URL", self.rift_server_url)
+        parser.set("ExternalTools", "RIFT_OUTPUT_FOLDER", self.rift_output_folder)
 
         if not parser.has_section("Fonts"): parser.add_section("Fonts")
         parser.set("Fonts", "UI_FONT", self.ui_font)
@@ -428,6 +439,7 @@ class Config:
         parser.set("Fonts", "INDENT_GUIDES_COLOR", self.indent_guides_color)
         parser.set("Fonts", "PSEUDOCODE_FOLDING_COLOR", self.pseudocode_folding_color)
         parser.set("Fonts", "ARGUMENT_NAME_HINTS_ENABLED", str(self.argument_name_hints_enabled))
+        parser.set("Fonts", "RUST_STRING_FIXUPS_ENABLED", str(self.rust_string_fixups_enabled))
         parser.set("Fonts", "ZOOM_ALL_VIEWS_ENABLED", str(self.zoom_all_views_enabled))
 
         if not parser.has_section("UI"): parser.add_section("UI")

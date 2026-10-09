@@ -44,7 +44,7 @@ The toolset is categorized into four primary domains: Settings, AI Assistant, Ut
 - **Validation Requirement:** All AI-generated outputs are heuristic proposals. They must be validated against the underlying assembly, cross-references, and runtime data before acceptance.
 - **Explicit Modification:** Autonomous agents and batch processors operate in a read-only capacity by default. State mutations within the IDB require explicit configuration and analyst review.
 - **External Communications:** Search pivots and external querying tools transmit selected data to third-party services. Analysts must verify that selected data does not violate operational security policies prior to transmission.
-- **Static Analysis Constraints:** Features such as shellcode analysis and string decryption operate purely via static analysis and do not execute code on the host system.
+- **Static Analysis Constraints:** Features such as shellcode analysis and string/byte inspection operate purely via static analysis and do not execute code on the host system.
 
 ## Terminology Reference
 

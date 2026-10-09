@@ -33,6 +33,10 @@ PseudoNote Extended actions are accessible primarily via the context menu within
 | Execute Deep Analyzer Pipeline | `Ctrl+Shift+S` | Global |
 | Execute Function Chain Summarizer | Menu Only | Global |
 | Execute FLOSS Strings Discovery | `Ctrl+Shift+F` | Global |
+| Rust Binary Triage | Menu Only | Global |
+| Display Rust Strings | Menu Only | Pseudocode |
+| Demangle Rust Symbols | Menu Only | Global |
+| RIFT Library Recognition | Menu Only | Global |
 | Analyze Static Shellcode/Bytes | Menu Only | Disassembly |
 | Toggle Call Highlight (Pseudocode) | `Ctrl+Alt+H` | Pseudocode |
 | Toggle Call Highlight (Graph/Linear) | Menu Only | Disassembly |
@@ -90,6 +94,7 @@ PseudoNote Extended actions are accessible primarily via the context menu within
 *   **Deep Analyzer:** A comprehensive, multi-stage pipeline that traverses call graphs, renames symbols bottom-up, and generates a standalone HTML report.
 *   **Function Chain Summarizer:** Applies Map-Reduce methodologies to synthesize execution flow summaries across complex call graphs.
 *   **FLOSS Integration:** Automates the extraction of stack-constructed, tightly-looped, and obfuscated strings via FireEye Labs Obfuscated String Solver.
+*   **Rust Binary Analysis:** Scores Rust-specific indicators, surfaces `lang_start_internal` and panic-location leads, improves Rust string display in pseudocode, demangles Rust function symbols, and can submit library-recognition jobs to a configured RIFT server.
 *   **Shellcode Analysis:** Performs static capability analysis on raw byte sequences.
 
 ### Navigational Utilities & Extraction

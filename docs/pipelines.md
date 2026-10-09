@@ -1,9 +1,10 @@
 # Analysis Pipelines
 
-PseudoNote Extended implements two primary automated analysis engines: the Deep Analyzer and the Bulk Analyzer. 
+PseudoNote Extended implements three primary automated analysis engines: the Bulk Analyzer, the Deep Analyzer, and Autonomous Investigation.
 
 *   **Bulk Analyzer:** Optimized for rapid, breadth-first triage of the entire binary.
 *   **Deep Analyzer:** Optimized for thorough, depth-first analysis of a specific execution chain.
+*   **Autonomous Investigation:** Optimized for interactive or binary-wide agentic analysis with host-owned plans, durable goals, evidence memory, and audited tool use.
 
 ## Bulk Function Analyzer Pipeline
 
@@ -42,14 +43,51 @@ The Deep Analyzer executes a comprehensive, multi-stage recursive analysis origi
 *   **Stage 7: Analysis Report Generation**
     Compiles a self-contained HTML report detailing the executive summary, MITRE ATT&CK coverage, function-level risk assessments, extracted IOCs, and interactive control flow diagrams. The report is deposited in the initialized workspace directory.
 
+## Autonomous Investigation Pipeline
+
+The Autonomous Investigation engine runs an evidence-driven agent inside IDA. It can answer focused analyst questions, investigate a selected function, or perform binary-wide coverage by repeatedly selecting host-approved tools, validating evidence, recording findings, and updating durable state.
+
+### Phase 1: Run Initialization
+
+*   **Agent Session Creation**
+    Creates or restores an `AgentSession` for the selected root function. The session tracks observations, successful tool capabilities, findings, examined addresses, function coverage, and final reports.
+*   **Durable Goal Registration**
+    Creates a SQLite-backed durable goal under the user's PseudoNote agent memory directory. The goal stores project identity, root address, run mode, status, timestamps, metadata, tool steps, events, and findings.
+*   **Host-Owned Planning**
+    Builds an `AgentPlan` for the run mode (`focused`, `interactive`, `autonomous_full`, or `legacy_bulk`). The plan is injected into prompts and exported into audit logs so progress is owned by the host rather than only by model prose.
+*   **Memory Recall**
+    Queries durable cross-project memory for relevant prior findings and function summaries. Matching memory is provided as bounded context at the start of the run.
+
+### Phase 2: Tool-Driven Evidence Collection
+
+*   **Strict Tool Envelope Parsing**
+    Model responses are parsed as JSON envelopes with `action=tools` or `action=final`. If the provider wraps a valid envelope in prose, the parser recovers the final valid agent envelope while still rejecting unrelated JSON snippets.
+*   **Policy and Tool Validation**
+    Each requested tool is normalized and checked against the agent policy. IDA-mutating actions, patching, and execution-class operations remain gated by policy and the user's IDA-changes opt-in.
+*   **Evidence Ledger Updates**
+    Tool results are recorded into the session observation ledger, the durable event log, and the tool audit trail. Repeated calls can be redirected, replayed from cache, or blocked to avoid infinite loops.
+*   **Function Transaction Control**
+    In binary-wide mode, the host supplies one ready function at a time. The agent must collect `function_evidence` plus `decompile` or `disassemble`, then call `record_function_analysis` before advancing.
+
+### Phase 3: Reflection, Memory, and Recovery
+
+*   **Self-Reflection**
+    The host reflector detects repeated tool loops, no-progress rounds, protocol errors, coverage gaps, and blocked plan steps. Recovery guidance is injected into the next prompt turn.
+*   **Durable Memory Writes**
+    Evidence-backed `record_finding` calls and completed function analyses are written to cross-project SQLite memory. Later investigations can recall these records through `search_findings` or startup memory hints.
+*   **Goal Checkpointing**
+    Session state is checkpointed into the IDB, while goal status and metadata are synchronized to the durable goal store. Paused, stopped, and completed runs preserve their state outside the active UI.
+*   **Audit and State Export**
+    The Audit Log exports model protocol, tool decisions, agent events, reflections, plan state, durable goal events, and memory matches. The Agent State dialog exposes durable goals and memory independently of an active run.
+
 ## Pipeline Comparison
 
-| Specification | Bulk Function Analyzer | Deep Analyzer |
-|---|---|---|
-| **Objective** | Breadth-first triage and classification | Depth-first deep investigation |
-| **Operational Scope** | Flat enumeration of all IDB functions | Bounded recursive graph from entry point |
-| **Analytical Depth** | Single-pass evaluation | Multi-stage contextual refinement |
-| **Variable Renaming** | No | Yes (Bottom-up) |
-| **Code Reconstruction** | No | Yes (Readable C generation) |
-| **Persistence Output** | IDB Tags and UI population | IDB modifications, disk artifacts, HTML Report |
-| **Execution Velocity** | High (Parallel batch processing) | Low (Sequential, thorough analysis) |
+| Specification | Bulk Function Analyzer | Deep Analyzer | Autonomous Investigation |
+|---|---|---|---|
+| **Objective** | Breadth-first triage and classification | Depth-first deep investigation | Agentic evidence collection, focused answers, and binary-wide coverage |
+| **Operational Scope** | Flat enumeration of all IDB functions | Bounded recursive graph from entry point | Selected root function, focused analyst request, or host-enumerated binary-wide function queue |
+| **Analytical Depth** | Single-pass evaluation | Multi-stage contextual refinement | Iterative tool use with host-owned planning, reflection, and evidence validation |
+| **Variable Renaming** | No | Yes (Bottom-up) | Optional, gated by the IDA-changes opt-in and host policy |
+| **Code Reconstruction** | No | Yes (Readable C generation) | Uses Hex-Rays decompile as primary evidence; disassembly is used as fallback or verification |
+| **Persistence Output** | IDB Tags and UI population | IDB modifications, disk artifacts, HTML Report | IDB checkpoints, durable SQLite goals, cross-project memory, audit logs, optional IDA changes |
+| **Execution Velocity** | High (Parallel batch processing) | Low (Sequential, thorough analysis) | Variable; focused mode is fast, binary-wide autonomous mode is sequential and evidence-gated |

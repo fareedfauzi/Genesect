@@ -53,7 +53,6 @@ from pseudonote_extended.handlers import (
     DumpBytesHandler,
     CopyFunctionTreeHandler,
     CopyGlobalXrefTreeHandler,
-    DecryptionWorkbenchHandler,
 )
 from pseudonote_extended.deep_analyzer import DeepAnalyzerHandler
 from pseudonote_extended.summarizer import SummarizerHandler
@@ -78,6 +77,16 @@ from pseudonote_extended.api_sequence_explorer import APISequenceExplorerHandler
 from pseudonote_extended.evidence_graph import EvidenceGraphHandler
 from pseudonote_extended.comment_explorer import CommentExplorerHandler
 from pseudonote_extended.agentic_analyzer import AgenticAnalysisHandler
+from pseudonote_extended.goresym_integration import GoReSymHandler
+from pseudonote_extended.go_package_tools import GoPackageOrganizerHandler
+from pseudonote_extended.rust_analysis_tools import (
+    RustDemangleHandler,
+    RustTriageHandler,
+    ToggleRustStringFixupsHandler,
+    create_rust_string_fixup_hooks,
+    destroy_rust_string_fixup_hooks,
+)
+from pseudonote_extended.rift_integration import RiftLibraryRecognitionHandler
 from pseudonote_extended.metadata import PLUGIN_DISPLAY_NAME, __version__
 from pseudonote_extended.ui.preview import UIPreviewHandler
 from pseudonote_extended.migration import LegacyMigrationHandler
@@ -126,6 +135,7 @@ class PseudoNotePlugin(idaapi.plugin_t):
         self.pseudocode_folding_hooks = None
         self.argument_hint_hooks = None
         self.default_visual_hooks = None
+        self.rust_string_fixup_hooks = None
 
     def init(self):
         if not QtWidgets:
@@ -192,6 +202,7 @@ class PseudoNotePlugin(idaapi.plugin_t):
             self.indent_guide_hooks = create_indent_guide_hooks()
             self.pseudocode_folding_hooks = create_pseudocode_folding_hooks()
             self.argument_hint_hooks = create_argument_name_hint_hooks()
+            self.rust_string_fixup_hooks = create_rust_string_fixup_hooks()
         else:
             print("[PseudoNote] Hex-Rays not available at init time, hooks will be installed on first enable")
             self.highlight_hooks = None
@@ -441,6 +452,62 @@ class PseudoNotePlugin(idaapi.plugin_t):
             icon("floss_strings", 183)
         )
         idaapi.register_action(floss_strings_desc)
+
+        goresym_desc = idaapi.action_desc_t(
+            "pseudonote_extended:goresym",
+            "GoReSym",
+            GoReSymHandler(),
+            "",
+            "Recover Go runtime symbols and types with Mandiant GoReSym",
+            icon("goresym", 73)
+        )
+        idaapi.register_action(goresym_desc)
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:go_package_organizer",
+            "Organize Go Packages",
+            GoPackageOrganizerHandler(),
+            "",
+            "Organize Go functions into package folders in IDA's function tree",
+            icon("go_package_organizer", 73)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:rust_triage",
+            "Rust Binary Triage",
+            RustTriageHandler(),
+            "",
+            "Score Rust indicators and summarize reverse-engineering leads",
+            icon("rust_triage", 73)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:rust_string_fixups",
+            "Display Rust Strings",
+            ToggleRustStringFixupsHandler(),
+            "",
+            "Render Rust string literals inline in Hex-Rays pseudocode",
+            icon("rust_string_fixups", 48),
+            getattr(idaapi, "ADF_CHECKABLE", 0)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:rust_demangle",
+            "Demangle Rust Symbols",
+            RustDemangleHandler(),
+            "",
+            "Rename Rust legacy/v0 mangled function symbols when possible",
+            icon("rust_demangle", 73)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:rift_library_recognition",
+            "RIFT Library Recognition",
+            RiftLibraryRecognitionHandler(),
+            "",
+            "Generate Rust library FLIRT signatures through a Microsoft RIFT server",
+            icon("rift_library_recognition", 73)
+        ))
         
 
         ask_chat_desc = idaapi.action_desc_t(
@@ -712,16 +779,6 @@ class PseudoNotePlugin(idaapi.plugin_t):
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
-            "pseudonote_extended:decryption_workbench",
-            "Decryption Workbench",
-            DecryptionWorkbenchHandler("pseudonote_extended:decryption_workbench"),
-            "",
-            "Analyze and decrypt selected strings, data, or constants",
-            icon("decryption_workbench", 73)
-        ))
-
-
-        idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:api_sequence_explorer", "API Sequence Explorer",
             APISequenceExplorerHandler(), "", "Correlate ordered API behaviors and suppress isolated dual-use calls",
             icon("api_sequence_explorer", 73)
@@ -751,6 +808,8 @@ class PseudoNotePlugin(idaapi.plugin_t):
         self.pseudocode_folding_hooks = None
         destroy_argument_name_hint_hooks()
         self.argument_hint_hooks = None
+        destroy_rust_string_fixup_hooks()
+        self.rust_string_fixup_hooks = None
         shutdown_zoom_all_views()
         if self.ctx_hooks:
             self.ctx_hooks.unhook()
@@ -775,7 +834,7 @@ class PseudoNotePlugin(idaapi.plugin_t):
             "pseudonote_extended:argument_name_hints",
             "pseudonote_extended:bookmarks_empty",
             "pseudonote_extended:zoom_all_views",
-            "pseudonote_extended:ask_chat", "pseudonote_extended:ask_chat_chain", "pseudonote_extended:agentic_analysis", "pseudonote_extended:deep_analyzer", "pseudonote_extended:summarizer", "pseudonote_extended:floss_strings",
+            "pseudonote_extended:ask_chat", "pseudonote_extended:ask_chat_chain", "pseudonote_extended:agentic_analysis", "pseudonote_extended:deep_analyzer", "pseudonote_extended:summarizer", "pseudonote_extended:floss_strings", "pseudonote_extended:goresym", "pseudonote_extended:go_package_organizer", "pseudonote_extended:rust_triage", "pseudonote_extended:rust_string_fixups", "pseudonote_extended:rust_demangle", "pseudonote_extended:rift_library_recognition",
             "pseudonote_extended:bulk_analyze", "pseudonote_extended:dnspy_xrefs",
             "pseudonote_extended:search_bytes_vt", "pseudonote_extended:search_str_vt",
             "pseudonote_extended:search_str_google", "pseudonote_extended:search_str_github",
@@ -802,7 +861,6 @@ class PseudoNotePlugin(idaapi.plugin_t):
             "pseudonote_extended:findcrypt_explorer",
             "pseudonote_extended:api_sequence_explorer",
             "pseudonote_extended:evidence_graph",
-            "pseudonote_extended:decryption_workbench",
             "pseudonote_extended:comment_explorer",
         ]:
             idaapi.unregister_action(action_id)

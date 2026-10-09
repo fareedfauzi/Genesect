@@ -37,10 +37,20 @@ from pseudonote_extended.idb_storage import save_to_idb, load_from_idb
 from pseudonote_extended.chat import ChatBubble, ChatInput, get_ida_colors, get_chat_font, markdown_to_html
 from pseudonote_extended.chat_export import export_chat_log
 from pseudonote_extended.renamer import count_sub_calls_fast, is_valid_seg, is_sys_func, clean_name
-from pseudonote_extended.agent_policy import AgentPolicy, EXECUTE, PATCH, WRITE_IDB
+from pseudonote_extended.agent import (
+    AgentPlan,
+    AgentReflector,
+    AgentStateManager,
+    AgentOrchestrator,
+    ExternalToolBridge,
+    GoalStore,
+    MemoryStore,
+    ToolRegistry,
+    project_id_from_context,
+)
+from pseudonote_extended.agent_policy import AgentPolicy, EXECUTE, PATCH, TOOL_CATEGORIES, WRITE_IDB
 from pseudonote_extended.agent_runtime import (
-    AgentSession, build_system_prompt, normalize_tool_call, parse_agent_response,
-    recovery_guidance, result_status,
+    AgentSession, build_system_prompt, recovery_guidance, result_status,
 )
 from pseudonote_extended.ui.theme import ThemeManager
 from pseudonote_extended.ui.components import PageHeader, Card, StatusBadge, ToggleSwitch
@@ -65,14 +75,14 @@ AGENT_TOOL_CATALOG = {
     "stack_layout": "Get decompiler variables, arguments, locations, and types. Args: ea.",
     "function_evidence": "Collect function-local strings, constants, named data, and callees. Args: ea, max_items.",
     "int_convert": "Deterministically convert an integer to hex, decimal, binary, bytes, and ASCII. Args: value, width (optional).",
-    "search_findings": "Recall prior evidence-backed findings. Args: query.",
+    "search_findings": "Recall prior evidence-backed findings from this IDB and durable cross-project memory. Args: query.",
     "record_finding": "Record an evidence-backed claim. Args: claim, confidence, evidence, tags.",
     "mark_examined": "Mark an address examined or a dead end. Args: ea, disposition, summary.",
     "record_function_analysis": (
         "Complete one function after evidence and code were collected. Args: ea, suggested_name (empty keeps the "
         "existing name), summary (one sentence), confidence (0-100), evidence (list of concrete citations)."
     ),
-    "save_finding": "Persist a claim for later sessions. Args: key, value. Requires IDA changes opt-in.",
+    "save_finding": "Persist a claim for later sessions and cross-project recall. Args: key, value. Requires IDA changes opt-in.",
     "rename_func": "Rename a function after review. Args: ea, new_name. Requires confirmation.",
     "rename_vars": "Rename local variables after review. Args: ea, renames. Requires confirmation.",
     "add_comment": "Add an analyst comment after review. Args: ea, text. Requires confirmation.",
@@ -80,6 +90,12 @@ AGENT_TOOL_CATALOG = {
     "create_apply_struct": "Create and apply a reviewed structure definition. Args: name, fields_json.",
     "jump_to_address": "Navigate the IDA UI. Args: ea.",
 }
+
+AGENT_TOOL_REGISTRY = ToolRegistry.from_catalog(
+    AGENT_TOOL_CATALOG,
+    categories=TOOL_CATEGORIES,
+    confirmation_categories={WRITE_IDB, PATCH, EXECUTE},
+)
 
 FUNCTION_SCOPED_AGENT_TOOLS = {
     "function_info", "decompile", "disassemble", "get_xrefs", "basic_blocks",
@@ -116,6 +132,49 @@ def _database_architecture():
         return str(processor), 64 if info.is_64bit() else 32 if info.is_32bit() else 16
     processor = getattr(getattr(idaapi, "ph", None), "id", "unknown")
     return str(processor), 32
+
+
+def _current_binary_identity():
+    """Return stable project identity fields without requiring one IDA API version."""
+    binary_hash = ""
+    input_path = ""
+    idb_path = ""
+    try:
+        sha_func = getattr(ida_nalt, "retrieve_input_file_sha256", None)
+        if callable(sha_func):
+            value = sha_func()
+            if isinstance(value, bytes):
+                binary_hash = value.hex()
+            else:
+                binary_hash = str(value or "")
+    except Exception:
+        binary_hash = ""
+    for getter in (
+        getattr(idc, "get_input_file_path", None),
+        getattr(idaapi, "get_input_file_path", None),
+        getattr(ida_nalt, "get_input_file_path", None),
+    ):
+        try:
+            if callable(getter):
+                input_path = str(getter() or "")
+                if input_path:
+                    break
+        except Exception:
+            pass
+    try:
+        idb_path = str(idc.get_idb_path() or "")
+    except Exception:
+        try:
+            idb_path = str(idaapi.get_path(idaapi.PATH_TYPE_IDB) or "")
+        except Exception:
+            idb_path = ""
+    project_id = project_id_from_context(binary_hash, idb_path or input_path)
+    return {
+        "project_id": project_id,
+        "binary_hash": binary_hash,
+        "input_path": input_path,
+        "idb_path": idb_path,
+    }
 
 
 def _looks_like_focused_request(text):
@@ -975,18 +1034,43 @@ def tool_patch_bytes(ea, hex_string):
     except Exception as e:
         return f"Error patching bytes: {e}"
 
-def tool_save_finding(key, value):
+def tool_save_finding(key, value, memory_store=None, project_id="", binary_hash="", goal_id=""):
     try:
         _idb_mod.agent_save_finding(key, value)
+        if memory_store:
+            memory_store.upsert_record(
+                record_id="saved:%s:%s" % (str(project_id or "default"), hashlib.sha256(str(key).encode("utf-8")).hexdigest()[:16]),
+                project_id=project_id or "default",
+                binary_hash=binary_hash,
+                scope="global",
+                kind="saved_finding",
+                title=str(key or "")[:500],
+                text=str(value or ""),
+                tags=["manual-save"],
+                source_goal_id=goal_id,
+            )
         return f"Success: Saved finding for '{key}'."
     except Exception as e:
         return f"Error saving finding: {e}"
 
-def tool_search_findings(query):
+def tool_search_findings(query, memory_store=None, project_id=""):
+    parts = []
     try:
-        return _idb_mod.agent_search_findings(query)
+        parts.append("IDB memory:\n" + _idb_mod.agent_search_findings(query))
     except Exception as e:
-        return f"Error searching findings: {e}"
+        parts.append(f"IDB memory error: {e}")
+    if memory_store:
+        try:
+            matches = memory_store.search(
+                query,
+                project_id=project_id or None,
+                limit=10,
+                include_cross_project=True,
+            )
+            parts.append(memory_store.format_results(matches))
+        except Exception as e:
+            parts.append(f"Durable memory error: {e}")
+    return "\n\n".join(parts)
 
 def tool_get_vtable_ptrs(ea, count=10):
     try:
@@ -1088,7 +1172,17 @@ def tool_jump_to_address(ea):
         return f"Error jumping to address: {e}"
 
 
-def execute_agent_tool(policy, tool_name, args, address, confirm_callback):
+def execute_agent_tool(
+    policy,
+    tool_name,
+    args,
+    address,
+    confirm_callback,
+    memory_store=None,
+    project_id="",
+    binary_hash="",
+    goal_id="",
+):
     """Permission-check, confirm, execute, and audit one tool call."""
     allowed, reason = policy.can_run(tool_name)
     if not allowed:
@@ -1127,8 +1221,19 @@ def execute_agent_tool(policy, tool_name, args, address, confirm_callback):
         "set_func_type": lambda: tool_set_func_type(args.get("ea", address), args.get("signature", "")),
         "read_memory": lambda: tool_read_memory(args.get("ea", 0), args.get("size", 32)),
         "patch_bytes": lambda: tool_patch_bytes(args.get("ea", 0), args.get("hex_string", "")),
-        "save_finding": lambda: tool_save_finding(args.get("key", ""), args.get("value", "")),
-        "search_findings": lambda: tool_search_findings(args.get("query", "")),
+        "save_finding": lambda: tool_save_finding(
+            args.get("key", ""),
+            args.get("value", ""),
+            memory_store=memory_store,
+            project_id=project_id,
+            binary_hash=binary_hash,
+            goal_id=goal_id,
+        ),
+        "search_findings": lambda: tool_search_findings(
+            args.get("query", ""),
+            memory_store=memory_store,
+            project_id=project_id,
+        ),
         "execute_idapython": lambda: tool_execute_idapython(args.get("script", "")),
         "jump_to_address": lambda: tool_jump_to_address(args.get("ea", address)),
     }
@@ -1198,6 +1303,36 @@ class AgenticForm(ida_kernwin.PluginForm):
         self.is_paused = False
         self.error_count = 0
         self.policy = AgentPolicy()
+        try:
+            self.goal_store = GoalStore()
+        except Exception:
+            self.goal_store = None
+        try:
+            self.memory_store = MemoryStore()
+        except Exception:
+            self.memory_store = None
+        self.goal_id = ""
+        self.project_id = ""
+        self.binary_hash = ""
+        self.agent_plan = AgentPlan()
+        self.reflector = AgentReflector()
+        self.external_bridge = ExternalToolBridge()
+        self.external_bridge.register(
+            "filesystem",
+            "filesystem",
+            "Host-approved file operations outside IDA. Disabled until a handler is registered.",
+            enabled=False,
+        )
+        self.external_bridge.register(
+            "browser",
+            "browser",
+            "Host-approved browser/web operations. Disabled until a handler is registered.",
+            enabled=False,
+        )
+        self._reflection_context = ""
+        self.orchestrator = AgentOrchestrator(
+            address, self.session, self.policy, AGENT_TOOL_REGISTRY, plan=self.agent_plan,
+        )
         self._active_request_id = None
         self._request_generation = 0
         self._focused_request = False
@@ -1209,6 +1344,63 @@ class AgenticForm(ida_kernwin.PluginForm):
         self._report_revisions = 0
         self._task_profile = ""
         self._task_targets = []
+
+    def _reset_agent_core(self, mode="interactive"):
+        identity = _current_binary_identity()
+        self.project_id = identity["project_id"]
+        self.binary_hash = identity["binary_hash"]
+        self.goal_id = ""
+        if getattr(self, "goal_store", None):
+            try:
+                objective = getattr(self.session, "mission", "") or "Investigate %s at 0x%X" % (
+                    self.function_name, self.address,
+                )
+                self.goal_id = self.goal_store.create_goal(
+                    objective=objective,
+                    project_id=identity["project_id"],
+                    binary_hash=identity["binary_hash"],
+                    root_ea="0x%X" % self.address,
+                    function_name=self.function_name,
+                    mode=str(mode or ""),
+                    metadata={
+                        "input_path": identity["input_path"],
+                        "idb_path": identity["idb_path"],
+                        "task_profile": str(getattr(self, "_task_profile", "") or ""),
+                        "target_count": len(getattr(self, "_task_targets", []) or []),
+                    },
+                )
+            except Exception:
+                self.goal_id = ""
+        self.orchestrator = AgentOrchestrator(
+            self.address,
+            self.session,
+            self.policy,
+            AGENT_TOOL_REGISTRY,
+            goal_store=getattr(self, "goal_store", None),
+            goal_id=self.goal_id,
+            plan=self.agent_plan,
+        )
+        self.orchestrator.reset(self.session, self.policy)
+        self.reflector.reset()
+        self._reflection_context = ""
+        self.orchestrator.reset_plan(
+            objective=getattr(self.session, "mission", "") or "Investigate %s at 0x%X" % (
+                self.function_name, self.address,
+            ),
+            mode=str(mode or "interactive"),
+            target_count=len(getattr(self, "_task_targets", []) or []),
+        )
+        self.orchestrator.event_log.append(
+            "run_mode",
+            goal_id=self.goal_id,
+            mode=str(mode or ""),
+            task_profile=str(getattr(self, "_task_profile", "") or ""),
+            max_steps=getattr(self.policy, "max_steps", 0),
+            max_seconds=getattr(self.policy, "max_seconds", 0),
+            allow_mutations=bool(getattr(self.policy, "allow_mutations", False)),
+            tool_count=len(AGENT_TOOL_REGISTRY.names()),
+            project_id=identity["project_id"],
+        )
 
     def OnCreate(self, form):
         self.parent = self.FormToPyQtWidget(form)
@@ -1243,6 +1435,11 @@ class AgenticForm(ida_kernwin.PluginForm):
         self.btn_audit.setToolTip("Inspect and export every tool decision")
         self.btn_audit.clicked.connect(self.on_view_audit)
         header.add_action(self.btn_audit)
+        self.btn_agent_state = QtWidgets.QPushButton("Agent State")
+        self.btn_agent_state.setObjectName("agentStateButton")
+        self.btn_agent_state.setToolTip("Inspect durable goals and cross-project memory")
+        self.btn_agent_state.clicked.connect(self.on_view_agent_state)
+        header.add_action(self.btn_agent_state)
         self.btn_export_log = QtWidgets.QPushButton("Export Log")
         self.btn_export_log.setToolTip("Export the visible chat conversation and final summary")
         self.btn_export_log.clicked.connect(self.export_investigation_log)
@@ -1445,6 +1642,10 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         self.btn_audit.setStyleSheet(btn_style)
         self.btn_audit.clicked.connect(self.on_view_audit)
         header_hbox.addWidget(self.btn_audit)
+        self.btn_agent_state = QtWidgets.QPushButton("Agent State")
+        self.btn_agent_state.setStyleSheet(btn_style)
+        self.btn_agent_state.clicked.connect(self.on_view_agent_state)
+        header_hbox.addWidget(self.btn_agent_state)
 
         self.allow_changes_cb = QtWidgets.QCheckBox("Allow IDA changes")
         self.allow_changes_cb.setChecked(False)
@@ -1509,7 +1710,25 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         layout.addWidget(self.controls_container)
 
     def on_view_kb(self):
-        res = "CURRENT INVESTIGATION\n" + self.session.snapshot() + "\n\nPERSISTENT FINDINGS\n" + _idb_mod.agent_search_findings("")
+        durable = ""
+        if getattr(self, "memory_store", None):
+            try:
+                matches = self.memory_store.search(
+                    "",
+                    project_id=getattr(self, "project_id", "") or None,
+                    limit=20,
+                    include_cross_project=True,
+                )
+                durable = "\n\nDURABLE CROSS-PROJECT MEMORY\n" + self.memory_store.format_results(matches)
+            except Exception as exc:
+                durable = f"\n\nDURABLE CROSS-PROJECT MEMORY\nError reading memory: {exc}"
+        res = (
+            "CURRENT INVESTIGATION\n"
+            + self.session.snapshot()
+            + "\n\nPERSISTENT FINDINGS\n"
+            + _idb_mod.agent_search_findings("")
+            + durable
+        )
         QtWidgets.QMessageBox.information(self.parent, "Agent Knowledge Base", res)
 
     def on_view_audit(self):
@@ -1524,9 +1743,36 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 tool_audit = json.loads(self.policy.export_json())
             except Exception:
                 tool_audit = self.policy.export_json()
+            goal = None
+            goal_events = []
+            memory_matches = []
+            if getattr(self, "goal_store", None) and getattr(self, "goal_id", ""):
+                try:
+                    goal = self.goal_store.get_goal(self.goal_id)
+                    goal_events = self.goal_store.goal_events(self.goal_id, limit=500)
+                except Exception:
+                    goal = {"id": self.goal_id, "error": "could not read durable goal state"}
+            if getattr(self, "memory_store", None):
+                try:
+                    memory_matches = self.memory_store.search(
+                        self.function_name,
+                        project_id=getattr(self, "project_id", "") or None,
+                        limit=20,
+                        include_cross_project=True,
+                    )
+                except Exception:
+                    memory_matches = []
             return json.dumps({
                 "tool_audit": tool_audit,
                 "model_protocol": self.protocol_audit,
+                "agent_events": json.loads(self.orchestrator.export_events_json()),
+                "agent_plan": self.agent_plan.to_dict(),
+                "reflections": self.reflector.to_list(),
+                "external_tools": self.external_bridge.list_tools(),
+                "external_tool_audit": self.external_bridge.audit_log(),
+                "durable_goal": goal,
+                "durable_goal_events": goal_events,
+                "durable_memory_matches": memory_matches,
             }, ensure_ascii=False, indent=2)
         viewer.setPlainText(audit_text())
         layout.addWidget(viewer)
@@ -1540,6 +1786,53 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         layout.addWidget(save_btn)
         dialog.exec_()
 
+    def on_view_agent_state(self):
+        dialog = QtWidgets.QDialog(self.parent)
+        dialog.setWindowTitle("Durable Agent State")
+        dialog.resize(820, 560)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        search_row = QtWidgets.QHBoxLayout()
+        query_box = QtWidgets.QLineEdit()
+        query_box.setPlaceholderText("Search durable memory")
+        search_row.addWidget(query_box, 1)
+        refresh_btn = QtWidgets.QPushButton("Refresh")
+        search_row.addWidget(refresh_btn)
+        layout.addLayout(search_row)
+        viewer = QtWidgets.QPlainTextEdit()
+        viewer.setReadOnly(True)
+        layout.addWidget(viewer, 1)
+
+        def state_text():
+            try:
+                manager = AgentStateManager(
+                    goal_store=getattr(self, "goal_store", None),
+                    memory_store=getattr(self, "memory_store", None),
+                )
+                return manager.export_json(
+                    project_id=getattr(self, "project_id", "") or None,
+                    query=query_box.text(),
+                )
+            except Exception as exc:
+                return json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2)
+
+        def refresh():
+            viewer.setPlainText(state_text())
+
+        refresh_btn.clicked.connect(refresh)
+        query_box.returnPressed.connect(refresh)
+        save_btn = QtWidgets.QPushButton("Export JSON")
+
+        def save_state():
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(dialog, "Export Agent State", "agent_state.json", "JSON (*.json)")
+            if path:
+                with open(path, "w", encoding="utf-8") as stream:
+                    stream.write(state_text())
+
+        save_btn.clicked.connect(save_state)
+        layout.addWidget(save_btn)
+        refresh()
+        dialog.exec_()
+
     def confirm_tool(self, tool_name, args, category):
         preview = json.dumps(args, indent=2, ensure_ascii=False)[:3000]
         answer = QtWidgets.QMessageBox.question(
@@ -1550,6 +1843,64 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         )
         return answer == QtWidgets.QMessageBox.Yes
 
+    def _execute_agent_tool(self, tool_name, args):
+        return execute_agent_tool(
+            self.policy,
+            tool_name,
+            args,
+            self.address,
+            self.confirm_tool,
+            memory_store=getattr(self, "memory_store", None),
+            project_id=getattr(self, "project_id", ""),
+            binary_hash=getattr(self, "binary_hash", ""),
+            goal_id=getattr(self, "goal_id", ""),
+        )
+
+    def _memory_context(self, query="", limit=5):
+        if not getattr(self, "memory_store", None):
+            return ""
+        try:
+            matches = self.memory_store.search(
+                query or self.function_name,
+                project_id=getattr(self, "project_id", "") or None,
+                limit=limit,
+                include_cross_project=True,
+            )
+            if not matches:
+                return ""
+            return "\n\nDURABLE MEMORY HINTS\n" + self.memory_store.format_results(matches)
+        except Exception:
+            return ""
+
+    def _plan_context(self):
+        try:
+            text = self.orchestrator.plan_prompt()
+            return ("\n\n" + text) if text else ""
+        except Exception:
+            return ""
+
+    def _reflect_after_round(self, all_calls_repeated=False):
+        try:
+            pending_count = len(self._pending_coverage_targets()) if self._task_profile == "autonomous_full" else 0
+        except Exception:
+            pending_count = 0
+        try:
+            reflections = self.reflector.after_round(
+                self.session,
+                self.agent_plan,
+                all_calls_repeated=all_calls_repeated,
+                task_profile=self._task_profile,
+                pending_count=pending_count,
+            )
+            for reflection in reflections:
+                self.orchestrator.event_log.append("reflection", **reflection.to_dict())
+            self._reflection_context = self.reflector.guidance_text(reflections)
+        except Exception:
+            self._reflection_context = ""
+
+    def _reflection_prompt_context(self):
+        return ("\n\n" + self._reflection_context) if self._reflection_context else ""
+
     def export_investigation_log(self):
         path = export_chat_log(
             self.parent, "Export Autonomous Conversation", f"autonomous_conversation_{self.address:X}.md",
@@ -1557,6 +1908,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 "title": "Autonomous Investigation", "mode": "autonomous_investigation",
                 "function": self.function_name, "address": f"0x{self.address:X}",
                 "phase": getattr(self.session, "phase", ""), "mission": getattr(self.session, "mission", ""),
+                "goal_id": getattr(self, "goal_id", ""),
+                "plan_progress": self.agent_plan.progress(),
                 "tool_steps": self.policy.steps,
             },
             self.export_transcript,
@@ -1619,9 +1972,20 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                         + json.dumps(self._task_targets, ensure_ascii=False)
                     )
                     self._max_tool_rounds = max(8, (target_budget * 3 + 3) // 4 + 2)
+            self._reset_agent_core("focused" if self._focused_request else "interactive")
+            self.orchestrator.event_log.append(
+                "analyst_request",
+                text=text,
+                focused=bool(self._focused_request),
+                target_count=len(self._task_targets),
+            )
             self.history = [self.system_prompt, {
                 "role": "user",
-                "content": f"{guidance}\n\nANALYST REQUEST\n{text}\n\nCURRENT STATE\n{self.session.snapshot()}",
+                "content": (
+                    f"{guidance}\n\nANALYST REQUEST\n{text}\n\nCURRENT STATE\n{self.session.snapshot()}"
+                    + self._plan_context()
+                    + self._memory_context(text)
+                ),
             }]
             self.is_running = True
             self.is_paused = False
@@ -1822,6 +2186,11 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             max_steps=max(128, target_count * 10 + 64),
             max_seconds=max(1800, target_count * 30),
         )
+        self._reset_agent_core("autonomous_full")
+        self.orchestrator.event_log.append(
+            "coverage_targets_built",
+            target_count=target_count,
+        )
         self.history = [self.system_prompt, {
             "role": "user",
             "content": (
@@ -1830,6 +2199,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 "fails). Use deeper tools for suspicious or structurally important functions. Never return a final "
                 "report while the host reports pending coverage.\n\n" + self._coverage_batch_text()
                 + "\n\nCurrent session state:\n" + self.session.snapshot()
+                + self._plan_context()
+                + self._memory_context(self.function_name)
             ),
         }]
         self.error_count = 0
@@ -1861,6 +2232,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         # Clear chat history visually
         self.history = [self.system_prompt]
         self.policy = AgentPolicy(allow_mutations=self.allow_changes_cb.isChecked())
+        self._reset_agent_core("legacy_bulk")
         self.error_count = 0
         self.btn_start.setEnabled(False)
         self.btn_pause.setEnabled(True)
@@ -1905,6 +2277,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         self.btn_pause.setVisible(False)
         self.btn_continue.setEnabled(True)
         self.btn_continue.setVisible(True)
+        self._sync_goal_status("paused")
         self.add_message("⏸ Agent paused. It will stop after the current thought completes.", is_user=False)
         
     def on_continue(self):
@@ -1917,6 +2290,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         self.typing_indicator.setText("Agent is thinking...")
         self.agent_status_badge.setText("Running")
         self.agent_status_badge.set_tone("info")
+        self._sync_goal_status("active")
         self.run_loop()
 
     def on_stop(self):
@@ -1937,7 +2311,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         self._remove_live_bubble()
         self.typing_indicator.setVisible(False)
         self.session.phase = "stopped"
-        self._checkpoint_session()
+        self._checkpoint_session(status="stopped")
         self.btn_start.setEnabled(True)
         self.btn_start.setVisible(True)
         self.btn_pause.setEnabled(False)
@@ -2039,8 +2413,10 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 is_throttle = kwargs.get("is_throttle", False)
                 err_msg = kwargs.get("error_msg", "Unknown error")
                 if is_throttle:
+                    self.orchestrator.event_log.append("model_throttled", error=err_msg)
                     self.add_message(f"⚠️ API Rate Limit (429) hit: {err_msg[:100]}...\\nPausing for 4 minutes before auto-continuing...", is_user=False)
                     self.is_paused = True
+                    self._sync_goal_status("paused")
                     self.btn_pause.setEnabled(False)
                     self.btn_continue.setEnabled(True)
                     
@@ -2140,11 +2516,81 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             except Exception as e:
                 self.add_message(f"❌ Error saving report: {e}", is_user=False)
                 
-    def _checkpoint_session(self):
+    def _goal_metadata(self):
+        identity = _current_binary_identity()
+        coverage_total = len(getattr(self, "_task_targets", []) or [])
+        coverage_done = 0
+        if coverage_total:
+            try:
+                coverage_done = len(self._covered_target_eas())
+            except Exception:
+                coverage_done = 0
+        return {
+            "phase": getattr(self.session, "phase", ""),
+            "turn": getattr(self.session, "turn", 0),
+            "tool_steps": getattr(self.policy, "steps", 0),
+            "task_profile": str(getattr(self, "_task_profile", "") or ""),
+            "target_count": coverage_total,
+            "covered_count": coverage_done,
+            "finding_count": len(getattr(self.session, "findings", []) or []),
+            "input_path": identity["input_path"],
+            "idb_path": identity["idb_path"],
+            "is_running": bool(getattr(self, "is_running", False)),
+            "is_paused": bool(getattr(self, "is_paused", False)),
+        }
+
+    def _sync_goal_status(self, status=None):
+        if getattr(self, "goal_store", None) and getattr(self, "goal_id", ""):
+            try:
+                self.goal_store.update_goal(
+                    self.goal_id,
+                    status=status,
+                    metadata=self._goal_metadata(),
+                )
+                for finding in getattr(self.session, "findings", []) or []:
+                    self.goal_store.add_finding(self.goal_id, finding)
+            except Exception:
+                pass
+        for finding in getattr(self.session, "findings", []) or []:
+            self._remember_finding(finding)
+
+    def _remember_finding(self, finding):
+        if not getattr(self, "memory_store", None) or not finding:
+            return
+        try:
+            self.memory_store.record_finding(
+                finding,
+                project_id=getattr(self, "project_id", "") or _current_binary_identity()["project_id"],
+                binary_hash=getattr(self, "binary_hash", ""),
+                source_goal_id=getattr(self, "goal_id", ""),
+                metadata={
+                    "root_ea": "0x%X" % self.address,
+                    "function_name": self.function_name,
+                },
+            )
+        except Exception:
+            pass
+
+    def _remember_function_analysis(self, ea, record):
+        if not getattr(self, "memory_store", None) or not record:
+            return
+        try:
+            self.memory_store.record_function_summary(
+                "0x%X" % int(ea),
+                record,
+                project_id=getattr(self, "project_id", "") or _current_binary_identity()["project_id"],
+                binary_hash=getattr(self, "binary_hash", ""),
+                source_goal_id=getattr(self, "goal_id", ""),
+            )
+        except Exception:
+            pass
+
+    def _checkpoint_session(self, status=None):
         try:
             save_to_idb(self.address, self.session.to_json(), tag=AGENTIC_HISTORY_TAG)
         except Exception as exc:
             self.add_message(f"Session checkpoint failed: {exc}", is_user=False)
+        self._sync_goal_status(status)
 
     def _final_report_contradictions(self, report):
         """Reject conclusions that contradict state already established by the host."""
@@ -2203,11 +2649,22 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
     def _process_agent_response(self, response):
         self.protocol_audit.append({
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "response": str(response),
+            "response": str(response)[:20000],
         })
-        envelope, error = parse_agent_response(response)
+        envelope, error = self.orchestrator.parse_response(response)
         if error:
             self.error_count += 1
+            try:
+                reflection = self.reflector.add(
+                    "protocol_error",
+                    "warning",
+                    str(error),
+                    "Return exactly one valid JSON envelope with action=tools or action=final.",
+                )
+                self.orchestrator.event_log.append("reflection", **reflection.to_dict())
+                self._reflection_context = self.reflector.guidance_text([reflection])
+            except Exception:
+                pass
             if self.error_count >= 3:
                 self._finish_stopped(f"Agent stopped after repeated invalid responses: {error}")
                 return
@@ -2222,6 +2679,9 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             contradictions = self._final_report_contradictions(envelope["report"])
             coverage_issues = [issue for issue in contradictions if issue.startswith("targets lack function-level analysis:")]
             if coverage_issues and (self._task_profile == "autonomous_full" or not self._must_finalize):
+                self.orchestrator.record_final(
+                    envelope["report"], accepted=False, reason="incomplete coverage",
+                )
                 self.history.append({
                     "role": "user",
                     "content": (
@@ -2235,6 +2695,11 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 return
             if unsupported or contradictions:
                 self._report_revisions += 1
+                self.orchestrator.record_final(
+                    envelope["report"],
+                    accepted=False,
+                    reason=", ".join((unsupported + contradictions)[:10]),
+                )
                 if self._report_revisions >= 3:
                     self._finish_stopped(
                         "Final report rejected after repeated unsupported addresses or network indicators: "
@@ -2254,7 +2719,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 return
             self.session.phase = "complete"
             self.session.final_report = envelope["report"][:500000]
-            self._checkpoint_session()
+            self.orchestrator.record_final(self.session.final_report, accepted=True)
+            self._checkpoint_session(status="complete")
             target_eas = {item["ea"] for item in self._task_targets}
             memory = [item for ea, item in self.session.function_memory.items() if ea in target_eas]
             analyzed = sum(1 for item in memory if item.get("state") in ("analyzed", "applied"))
@@ -2281,6 +2747,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             self.btn_stop.setVisible(False)
             self.agent_status_badge.setText("Complete")
             self.agent_status_badge.set_tone("success")
+            self._sync_goal_status("complete")
             self._refresh_agent_dashboard()
             return
 
@@ -2305,15 +2772,17 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         all_calls_repeated = True
         self.session.begin_round()
         for call in envelope["calls"]:
-            normalized, validation_error = normalize_tool_call(
-                call["tool"], call["args"], self.address, AGENT_TOOL_CATALOG,
-            )
+            normalized, validation_error = self.orchestrator.validate_call(call)
             if validation_error:
                 all_calls_repeated = False
-                tool_name, args = call["tool"], call.get("args", {})
+                tool_name = call.get("tool", "") if isinstance(call, dict) else ""
+                args = call.get("args", {}) if isinstance(call, dict) else {}
+                if not isinstance(args, dict):
+                    args = {}
                 result = "Error: " + validation_error
                 self.session.record_result(tool_name, args, result)
                 self.session.record_observation(tool_name, args, result)
+                self.orchestrator.record_tool_result(tool_name, args, result)
                 observations.append(self.policy.untrusted_result(tool_name, result))
                 observations.append("HOST DECISION GUIDANCE\n" + recovery_guidance(tool_name, result))
                 self.add_message(f"Tool `{tool_name}` rejected: {validation_error}", is_user=False)
@@ -2378,7 +2847,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     else:
                         result = "Error: Repeated identical call blocked; choose a pending target or synthesize existing evidence."
                 else:
-                    result = execute_agent_tool(self.policy, tool_name, args, self.address, self.confirm_tool)
+                    result = self._execute_agent_tool(tool_name, args)
             elif (
                 tool_name == "disassemble"
                 and self.session.has_success("decompile", args.get("ea", f"0x{self.address:X}"))
@@ -2400,6 +2869,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                         args.get("claim", ""), confidence,
                         args.get("evidence", []), args.get("tags", []),
                     )
+                    self._remember_finding(finding)
                     result = f"Recorded verified finding {finding.finding_id}."
                     self.policy.record(tool_name, args, True, result)
             elif tool_name == "mark_examined":
@@ -2439,7 +2909,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                         result = "Error: Suggested name was rejected as generic, invalid, or address-derived."
                         self.policy.record(tool_name, args, False, result)
                     elif confidence <= 50 and attempts < 3:
-                        self.session.remember_function(ea, {
+                        memory_record = self.session.remember_function(ea, {
                             "original_name": original_name, "suggested_name": validated_name or original_name,
                             "summary": summary, "confidence": confidence, "evidence": evidence[:20],
                             "state": "retry_low_confidence", "attempts": attempts,
@@ -2448,6 +2918,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                             "callees": list(getattr(self, "_target_by_ea", {}).get(canonical, {}).get("callees", [])),
                             "name_validation": "accepted" if requested_name else "retained",
                         })
+                        self._remember_function_analysis(ea, memory_record)
                         result = f"Low-confidence result ({confidence}%) stored; reanalyze this function individually."
                         self.policy.record(tool_name, args, True, result)
                     else:
@@ -2462,7 +2933,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                             "apply_failed" if self.policy.allow_mutations else "analyzed"
                         )
                         final_name = apply_result.get("final_name") or original_name
-                        self.session.remember_function(ea, {
+                        memory_record = self.session.remember_function(ea, {
                             "original_name": original_name, "current_name": final_name,
                             "original_comment": apply_result.get(
                                 "original_comment", previous.get("original_comment", "")
@@ -2477,6 +2948,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                             "comment_applied": bool(apply_result.get("commented")),
                             "last_error": apply_result.get("error", ""),
                         })
+                        self._remember_function_analysis(ea, memory_record)
                         if apply_result.get("ok"):
                             self.session.mark_examined(ea, "analyzed", summary)
                             result = f"Completed {canonical}: {final_name} — {summary} Confidence: {confidence}%."
@@ -2496,7 +2968,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                             result = f"Error: Rename/comment transaction failed for {canonical}: {apply_result.get('error', 'unknown error')}"
                             self.policy.record(tool_name, args, False, result)
             else:
-                result = execute_agent_tool(self.policy, tool_name, args, self.address, self.confirm_tool)
+                result = self._execute_agent_tool(tool_name, args)
             if (
                 self._task_profile == "autonomous_full"
                 and tool_name in ("function_evidence", "decompile", "disassemble")
@@ -2511,7 +2983,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     failures.get("function_evidence", 0) >= 3
                     or (failures.get("decompile", 0) >= 1 and failures.get("disassemble", 0) >= 1)
                 )
-                self.session.remember_function(failed_ea, {
+                memory_record = self.session.remember_function(failed_ea, {
                     "original_name": prior.get("original_name") or idc.get_func_name(failed_ea) or f"sub_{failed_ea:X}",
                     "current_name": idc.get_func_name(failed_ea) or f"sub_{failed_ea:X}",
                     "state": "failed" if terminal_failure else "retry_tool_failure",
@@ -2519,6 +2991,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     "summary": prior.get("summary", "Analysis unavailable after IDA code-recovery failure."),
                     "code_fingerprint": _function_code_fingerprint(failed_ea),
                 })
+                self._remember_function_analysis(failed_ea, memory_record)
                 if terminal_failure:
                     self.add_message(
                         f"{failed_key} needs attention — both decompilation/disassembly or repeated evidence collection failed.",
@@ -2527,8 +3000,10 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     self._refresh_agent_dashboard()
                     self._refresh_agent_dashboard()
             if replayed:
+                self.orchestrator.record_tool_result(tool_name, args, result, replayed=True)
                 made_progress = False
             else:
+                self.orchestrator.record_tool_result(tool_name, args, result, replayed=replayed)
                 self.session.record_observation(tool_name, args, result)
                 made_progress = self.session.record_result(tool_name, args, result)
             if tool_name == "function_evidence" and result_status(result) == "success":
@@ -2569,6 +3044,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         if self.session.should_finalize() and self._task_profile != "autonomous_full":
             self._must_finalize = True
 
+        self._reflect_after_round(all_calls_repeated=all_calls_repeated)
         self._checkpoint_session()
         self._refresh_agent_dashboard()
         self.history.append({
@@ -2576,6 +3052,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             "content": (
                 "\n\n".join(observations)
                 + "\n\nCURRENT INVESTIGATION STATE\n" + self.session.snapshot()
+                + self._plan_context()
+                + self._reflection_prompt_context()
                 + ("\n\n" + self._coverage_batch_text() if self._task_profile == "autonomous_full" else "")
                 + ("\n\nTOOL LIMIT REACHED: Return action=final now with the direct answer; do not call more tools."
                    if self._must_finalize else "")
@@ -2628,6 +3106,8 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 is_throttle = kwargs.get("is_throttle", False)
                 err_msg = kwargs.get("error_msg", "Unknown error")
                 if is_throttle:
+                    self.orchestrator.event_log.append("model_throttled", error=err_msg)
+                    self._sync_goal_status("paused")
                     self.add_message(f"⚠️ API Rate Limit (429) hit: {err_msg[:100]}...\nPausing for 4 minutes before auto-continuing...", is_user=False)
                     self.is_paused = True
                     self.btn_pause.setEnabled(False)
@@ -2652,6 +3132,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                     update_countdown()
                     return
                 else:
+                    self.orchestrator.event_log.append("model_empty_response", error=err_msg)
                     self._finish_stopped(f"Agent request stopped: no response from AI ({err_msg}).")
                     return
 
@@ -2693,7 +3174,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 args = tool_call.get("args", {})
                 self.add_message(f"🛠️ Executing Tool: `{tool_name}`\nArgs: {json.dumps(args, indent=2)}", is_user=False)
                 
-                result = execute_agent_tool(self.policy, tool_name, args, self.address, self.confirm_tool)
+                result = self._execute_agent_tool(tool_name, args)
 
                 # Create a concise summary for the UI to prevent spam
                 if result.startswith("Error") or result.startswith("Failed") or "Exception" in result[:50]:
@@ -2761,12 +3242,19 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 self.btn_continue.setEnabled(False)
 
         try:
+            self.orchestrator.event_log.append(
+                "model_request",
+                message_count=len(self.history),
+                prompt_chars=sum(len(str(item.get("content", ""))) for item in self.history),
+                max_completion_tokens=8192,
+            )
             self._active_request_id = AI_CLIENT.query_model_async(
                 self.history, handle_response, on_chunk=handle_chunk,
                 additional_options={"max_completion_tokens": 8192},
             )
         except Exception as exc:
             self._active_request_id = None
+            self.orchestrator.event_log.append("model_request_error", error=str(exc))
             self._finish_stopped(f"Could not start agent request: {exc}")
 
     def OnClose(self, form):

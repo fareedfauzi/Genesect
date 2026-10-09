@@ -86,6 +86,8 @@ class SemanticExplorerForm(ida_kernwin.PluginForm):
 
     def populate(self):
         self.table.setSortingEnabled(False)
+        self.table.clearSpans()
+        self.table.clearContents()
         self.table.setRowCount(max(1, len(self.rows)))
         if not self.rows:
             item = QtWidgets.QTableWidgetItem("No results found.")
