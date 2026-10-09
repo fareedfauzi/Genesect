@@ -40,6 +40,10 @@ COMMON_GROUPS = (
         "pseudonote_extended:regex_idb_search", "-",
         "pseudonote_extended:floss_strings", "pseudonote_extended:dump_bytes",
     )),
+    ("Utilities/Go && Rust", (
+        "pseudonote_extended:go_rust_user_code_map",
+        "pseudonote_extended:go_rust_mark_idb",
+    )),
     ("Utilities/GoLang", (
         "pseudonote_extended:goresym", "-",
         "pseudonote_extended:go_package_organizer",

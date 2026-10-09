@@ -77,6 +77,7 @@ from pseudonote_extended.api_sequence_explorer import APISequenceExplorerHandler
 from pseudonote_extended.evidence_graph import EvidenceGraphHandler
 from pseudonote_extended.comment_explorer import CommentExplorerHandler
 from pseudonote_extended.agentic_analyzer import AgenticAnalysisHandler
+from pseudonote_extended.go_rust_user_code_map import GoRustMarkIDBHandler, GoRustUserCodeMapHandler
 from pseudonote_extended.goresym_integration import GoReSymHandler
 from pseudonote_extended.go_package_tools import GoPackageOrganizerHandler
 from pseudonote_extended.rust_analysis_tools import (
@@ -473,6 +474,24 @@ class PseudoNotePlugin(idaapi.plugin_t):
         ))
 
         idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:go_rust_user_code_map",
+            "Go/Rust User Code Map",
+            GoRustUserCodeMapHandler(),
+            "",
+            "Classify Go/Rust runtime, stdlib, third-party, and likely user code",
+            icon("go_rust_user_code_map", 73)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
+            "pseudonote_extended:go_rust_mark_idb",
+            "Mark Go/Rust User Code in IDB",
+            GoRustMarkIDBHandler(),
+            "",
+            "Add comments and colors for likely Go/Rust user and third-party code",
+            icon("go_rust_mark_idb", 73)
+        ))
+
+        idaapi.register_action(idaapi.action_desc_t(
             "pseudonote_extended:rust_triage",
             "Rust Binary Triage",
             RustTriageHandler(),
@@ -834,7 +853,7 @@ class PseudoNotePlugin(idaapi.plugin_t):
             "pseudonote_extended:argument_name_hints",
             "pseudonote_extended:bookmarks_empty",
             "pseudonote_extended:zoom_all_views",
-            "pseudonote_extended:ask_chat", "pseudonote_extended:ask_chat_chain", "pseudonote_extended:agentic_analysis", "pseudonote_extended:deep_analyzer", "pseudonote_extended:summarizer", "pseudonote_extended:floss_strings", "pseudonote_extended:goresym", "pseudonote_extended:go_package_organizer", "pseudonote_extended:rust_triage", "pseudonote_extended:rust_string_fixups", "pseudonote_extended:rust_demangle", "pseudonote_extended:rift_library_recognition",
+            "pseudonote_extended:ask_chat", "pseudonote_extended:ask_chat_chain", "pseudonote_extended:agentic_analysis", "pseudonote_extended:deep_analyzer", "pseudonote_extended:summarizer", "pseudonote_extended:floss_strings", "pseudonote_extended:go_rust_user_code_map", "pseudonote_extended:go_rust_mark_idb", "pseudonote_extended:goresym", "pseudonote_extended:go_package_organizer", "pseudonote_extended:rust_triage", "pseudonote_extended:rust_string_fixups", "pseudonote_extended:rust_demangle", "pseudonote_extended:rift_library_recognition",
             "pseudonote_extended:bulk_analyze", "pseudonote_extended:dnspy_xrefs",
             "pseudonote_extended:search_bytes_vt", "pseudonote_extended:search_str_vt",
             "pseudonote_extended:search_str_google", "pseudonote_extended:search_str_github",

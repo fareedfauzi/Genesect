@@ -108,6 +108,12 @@ Runs Mandiant GoReSym from **Utilities > GoLang > GoReSym** to recover Go runtim
 
 Creates Go-focused folders in IDA's function tree, grouping functions under `Go/User`, `Go/ThirdParty`, `Go/Standard`, `Go/Runtime`, and `Go/Uncategorized` when IDA's function folder API is available.
 
+### Go/Rust User Code Map
+
+Builds a shared Go and Rust navigation map under **Utilities > Go & Rust**. The map classifies functions as likely user code, third-party dependency code, standard library code, runtime code, or unknown code using recovered Go package names, Rust demangled symbols, imports, and string references.
+
+Use **Mark IDB** inside the map to add repeatable function comments and IDA colors for likely user and third-party functions. Runtime and standard-library functions are skipped by default so the actual program logic stands out in normal IDA navigation. Use **Clear Marks** in the same map to remove PseudoNote Go/Rust classification comments and reset Go/Rust function colors back to IDA defaults.
+
 ### Rust Binary Analysis
 
 Adds Rust-focused triage under **Utilities > Rust** based on JPCERT/CC's Rust reverse-engineering research.
