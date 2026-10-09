@@ -1,13 +1,13 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions
 
 echo ==========================================
-echo   PseudoNote Extended Installer (Windows) 
+echo   Genesect Installer (Windows)
 echo ==========================================
 
 set "SOURCE_DIR=%~dp0"
-set "SOURCE_ENTRY=%SOURCE_DIR%PseudoNoteExtended.py"
-set "SOURCE_PACKAGE=%SOURCE_DIR%pseudonote_extended"
+set "SOURCE_ENTRY=%SOURCE_DIR%Genesect.py"
+set "SOURCE_PACKAGE=%SOURCE_DIR%genesect"
 
 if not "%~1"=="" (
     set "IDA_PLUGINS=%~f1"
@@ -24,25 +24,31 @@ if not exist "%IDA_PLUGINS%\" mkdir "%IDA_PLUGINS%"
 
 echo Target Directory: %IDA_PLUGINS%
 
-echo [*] Cleaning up classic PseudoNote installations...
-if exist "%IDA_PLUGINS%\pseudonote.py" del /F /Q "%IDA_PLUGINS%\pseudonote.py"
-if exist "%IDA_PLUGINS%\pseudonote\" rmdir /S /Q "%IDA_PLUGINS%\pseudonote"
-if exist "%IDA_PLUGINS%\pseudonote.ini" del /F /Q "%IDA_PLUGINS%\pseudonote.ini"
-if exist "%USERPROFILE%\.pseudonote.ini" del /F /Q "%USERPROFILE%\.pseudonote.ini"
+echo [*] Cleaning up legacy installations...
+set "LEGACY_ENTRY=Pseudo"
+set "LEGACY_ENTRY=%LEGACY_ENTRY%NoteExtended.py"
+set "LEGACY_BASE=pseudo"
+set "LEGACY_BASE=%LEGACY_BASE%note"
+if exist "%IDA_PLUGINS%\Genesect.py" del /F /Q "%IDA_PLUGINS%\Genesect.py"
+if exist "%IDA_PLUGINS%\%LEGACY_ENTRY%" del /F /Q "%IDA_PLUGINS%\%LEGACY_ENTRY%"
+if exist "%IDA_PLUGINS%\%LEGACY_BASE%.py" del /F /Q "%IDA_PLUGINS%\%LEGACY_BASE%.py"
+if exist "%IDA_PLUGINS%\%LEGACY_BASE%\" rmdir /S /Q "%IDA_PLUGINS%\%LEGACY_BASE%"
+if exist "%IDA_PLUGINS%\%LEGACY_BASE%.ini" del /F /Q "%IDA_PLUGINS%\%LEGACY_BASE%.ini"
+if exist "%USERPROFILE%\.%LEGACY_BASE%.ini" del /F /Q "%USERPROFILE%\.%LEGACY_BASE%.ini"
 
 if not exist "%SOURCE_ENTRY%" (
-    echo ERROR: Cannot find local PseudoNoteExtended.py. 
+    echo ERROR: Cannot find local Genesect.py.
     echo Please use install.ps1 for remote installation:
-    echo irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 ^| iex
+    echo irm https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.ps1 ^| iex
     exit /b 1
 )
 
 echo [*] Copying files...
-set "TARGET_PACKAGE=%IDA_PLUGINS%\pseudonote_extended"
+set "TARGET_PACKAGE=%IDA_PLUGINS%\genesect"
 if exist "%TARGET_PACKAGE%\" rmdir /S /Q "%TARGET_PACKAGE%"
 mkdir "%TARGET_PACKAGE%"
 
-copy /Y "%SOURCE_ENTRY%" "%IDA_PLUGINS%\PseudoNoteExtended.py" >nul
+copy /Y "%SOURCE_ENTRY%" "%IDA_PLUGINS%\Genesect.py" >nul
 robocopy "%SOURCE_PACKAGE%" "%TARGET_PACKAGE%" /E /R:0 /W:0 /XD __pycache__ /XF *.pyc *.pyo >nul
 
 echo [*] Installation completed successfully.

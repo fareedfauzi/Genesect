@@ -1,12 +1,12 @@
-# PseudoNote Extended
+﻿# Genesect
 
 **An AI-powered IDA Pro plugin built for reverse engineers and malware analysts.**
 
-PseudoNote Extended is an extended version of previous PseudoNote I created. It takes the grunt work out of reverse engineering by integrating Large Language Models (LLMs) directly into IDA Pro and the Hex-Rays decompiler. It assists analysts with tasks such as renaming functions and variables, explaining complex or obscure code, recovering structures, and generating comprehensive analysis reports.
+Genesect is an IDA Pro plugin for practical reverse engineering and malware analysis. It takes the grunt work out of reverse engineering by integrating Large Language Models (LLMs) directly into IDA Pro and the Hex-Rays decompiler. It assists analysts with tasks such as renaming functions and variables, explaining complex or obscure code, recovering structures, and generating comprehensive analysis reports.
 
-Inspired by the Gepetto IDA plugin, PseudoNote takes the concept further - essentially Gepetto on steroids - with additional capabilities designed for practical malware analysis and large-scale reverse engineering.
+Inspired by the Gepetto IDA plugin, Genesect takes the concept further - essentially Gepetto on steroids - with additional capabilities designed for practical malware analysis and large-scale reverse engineering.
 
-Whether you're triaging a massive binary or performing a deep dive into a specific execution chain, PseudoNote provides an interactive, AI-assisted workflow directly inside your IDA Pro workspace.
+Whether you're triaging a massive binary or performing a deep dive into a specific execution chain, Genesect provides an interactive, AI-assisted workflow directly inside your IDA Pro workspace.
 
 ## What's in the box?
 
@@ -18,7 +18,7 @@ Whether you're triaging a massive binary or performing a deep dive into a specif
 
 ## Installation
 
-PseudoNote Extended runs completely independent of the classic PseudoNote plugin, so you can safely install them side-by-side.
+Genesect runs independently from older installations, so you can safely install it without overwriting existing analysis data.
 
 ### 1. Install Dependencies
 
@@ -35,13 +35,13 @@ pip install openai httpx PySide6
 **Quick Install (Windows):**
 
 ```powershell
-irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.ps1 | iex
 ```
 
 **Quick Install (Linux / macOS):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.sh | bash
 ```
 
 **Manual Install:**
@@ -49,15 +49,15 @@ curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/mai
 Clone the repository:
 
 ```bash
-git clone https://github.com/fareedfauzi/PseudoNote-Extended.git
-cd PseudoNote-Extended
+git clone https://github.com/fareedfauzi/Genesect-Extended.git
+cd Genesect-Extended
 ```
 
 Copy these into your IDA user plugins folder:
 
 ```text
-PseudoNoteExtended.py
-pseudonote_extended/
+Genesect.py
+genesect/
 ```
 
 Common IDA user plugin folders:
@@ -76,7 +76,7 @@ Restart IDA Pro once it's done!
 
 ## Configuration
 
-To hook up your API keys, just right-click anywhere in the Pseudocode or IDA-View windows and hit **PseudoNote > Settings**.
+To hook up your API keys, just right-click anywhere in the Pseudocode or IDA-View windows and hit **Genesect > Settings**.
 
 From there, you can select your provider (OpenAI, LM Studio, Ollama, DeepSeek, etc.), plug in your endpoint/key, and hit **Test Connection**. Your settings take effect immediately upon saving.
 

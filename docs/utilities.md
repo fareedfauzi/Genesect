@@ -1,6 +1,6 @@
-# Utility Procedures & Explorers
+﻿# Utility Procedures & Explorers
 
-The utilities detailed in this document are accessible via **Right-Click > PseudoNote > Utilities**. Analysts are encouraged to register frequently utilized commands to the **Bookmarks** menu for rapid access.
+The utilities detailed in this document are accessible via **Right-Click > Genesect > Utilities**. Analysts are encouraged to register frequently utilized commands to the **Bookmarks** menu for rapid access.
 
 ## Navigational Aids and Visualizations
 
@@ -36,7 +36,7 @@ Visually renders vertical indent guidelines within the pseudocode view to easily
 
 <img width="611" height="645" alt="image" src="https://github.com/user-attachments/assets/572ba097-2186-45bb-b7d7-66c4de0c51fc" />
 
-Allows dynamic font scaling of the Hex-Rays pseudocode, disassembly, and native PseudoNote interfaces by holding `Ctrl` and scrolling the mouse wheel.
+Allows dynamic font scaling of the Hex-Rays pseudocode, disassembly, and native Genesect interfaces by holding `Ctrl` and scrolling the mouse wheel.
 
 ### Folded Pseudocode
 
@@ -76,7 +76,7 @@ An interactive, lazily-loaded hierarchical visualization interface for navigatin
 
 ## Malware Analysis Explorers
 
-PseudoNote Extended includes specialized heuristic engines designed to accelerate malware triage.
+Genesect includes specialized heuristic engines designed to accelerate malware triage.
 
 *   **Find Crypt Explorer:** Detects exact crypto/hash constants and tables plus Windows CryptoAPI, CNG, DPAPI, SChannel, compression, and encoding APIs. It also covers common cross-platform crypto, hashing, compression, encoding, modern elliptic-curve, and post-quantum library symbols. Scanning is read-only; annotation requires explicit confirmation and preserves analyst-defined names.
 *   **Anti-Analysis Explorer:** Detects environmental fingerprinting, virtual machine evasion, timing checks, and debugger detection mechanisms.
@@ -100,9 +100,9 @@ Provides native execution and parsing of the FireEye Labs Obfuscated String Solv
 
 Runs Mandiant GoReSym from **Utilities > GoLang > GoReSym** to recover Go runtime names and type metadata.
 
-1. Select an existing GoReSym binary, make it available in `$PATH`, or let PseudoNote download the latest platform release.
-2. PseudoNote locates the opened sample automatically, or prompts you to select it when the original file is missing.
-3. The JSON output is saved beside the IDB and applied to the database using the GoReSym rename workflow. Reconstructed C type declarations are skipped by default to avoid noisy IDA parser failures; set `PSEUDONOTE_GORESYM_PARSE_TYPES=1` only when you explicitly want to experiment with type import.
+1. Select an existing GoReSym binary, make it available in `$PATH`, or let Genesect download the latest platform release.
+2. Genesect locates the opened sample automatically, or prompts you to select it when the original file is missing.
+3. The JSON output is saved beside the IDB and applied to the database using the GoReSym rename workflow. Reconstructed C type declarations are skipped by default to avoid noisy IDA parser failures; set `GENESECT_GORESYM_PARSE_TYPES=1` only when you explicitly want to experiment with type import.
 
 ### Go Package Organizer
 
@@ -112,7 +112,7 @@ Creates Go-focused folders in IDA's function tree, grouping functions under `Go/
 
 Builds a shared Go and Rust navigation map under **Utilities > Go & Rust**. The map classifies functions as likely user code, third-party dependency code, standard library code, runtime code, or unknown code using recovered Go package names, Rust demangled symbols, imports, and string references.
 
-Use **Mark IDB** inside the map to add repeatable function comments and IDA colors for likely user and third-party functions. Runtime and standard-library functions are skipped by default so the actual program logic stands out in normal IDA navigation. Use **Clear Marks** in the same map to remove PseudoNote Go/Rust classification comments and reset Go/Rust function colors back to IDA defaults.
+Use **Mark IDB** inside the map to add repeatable function comments and IDA colors for likely user and third-party functions. Runtime and standard-library functions are skipped by default so the actual program logic stands out in normal IDA navigation. Use **Clear Marks** in the same map to remove Genesect Go/Rust classification comments and reset Go/Rust function colors back to IDA defaults.
 
 ### Rust Binary Analysis
 

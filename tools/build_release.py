@@ -1,4 +1,4 @@
-"""Build deterministic PseudoNote Extended release archives and hash manifests."""
+﻿"""Build deterministic Genesect release archives and hash manifests."""
 
 import argparse
 import hashlib
@@ -10,9 +10,9 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-DEFAULT_ARCHIVE_NAME = "PseudoNote-Extended.zip"
+DEFAULT_ARCHIVE_NAME = "Genesect-Extended.zip"
 REQUIRED_FILES = (
-    "PseudoNoteExtended.py",
+    "Genesect.py",
 )
 OPTIONAL_FILES = (
     "README.md",
@@ -27,10 +27,10 @@ OPTIONAL_FILES = (
 
 
 def metadata_version():
-    metadata = (ROOT / "pseudonote_extended" / "metadata.py").read_text(encoding="utf-8")
+    metadata = (ROOT / "genesect" / "metadata.py").read_text(encoding="utf-8")
     match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', metadata, re.MULTILINE)
     if not match:
-        raise RuntimeError("Could not find __version__ in pseudonote_extended/metadata.py")
+        raise RuntimeError("Could not find __version__ in genesect/metadata.py")
     return match.group(1)
 
 
@@ -43,7 +43,7 @@ def release_files():
     files.extend(ROOT / name for name in REQUIRED_FILES)
     files.extend(ROOT / name for name in OPTIONAL_FILES if (ROOT / name).is_file())
     files.extend(path for path in (ROOT / "docs").rglob("*") if path.is_file())
-    files.extend(path for path in (ROOT / "pseudonote_extended").rglob("*") if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
+    files.extend(path for path in (ROOT / "genesect").rglob("*") if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
     return sorted(files, key=lambda path: path.relative_to(ROOT).as_posix())
 
 
@@ -62,10 +62,10 @@ def build(version=None):
     version = version or metadata_version()
     DIST.mkdir(exist_ok=True)
     archive = DIST / DEFAULT_ARCHIVE_NAME
-    versioned_archive = DIST / f"PseudoNote-Extended-{version}.zip"
+    versioned_archive = DIST / f"Genesect-Extended-{version}.zip"
     files = release_files()
     manifest = {
-        "name": "PseudoNote Extended",
+        "name": "Genesect",
         "version": version,
         "files": {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in files},
     }
@@ -85,6 +85,6 @@ def build(version=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", help="Override the version from pseudonote_extended/metadata.py")
+    parser.add_argument("--version", help="Override the version from genesect/metadata.py")
     args = parser.parse_args()
     build(version=args.version)

@@ -1,4 +1,4 @@
-"""Repeatable microbenchmarks for dependency-free release-critical primitives."""
+﻿"""Repeatable microbenchmarks for dependency-free release-critical primitives."""
 
 import importlib.util
 import pathlib
@@ -16,8 +16,8 @@ def load(name, path):
     return module
 
 
-batch = load("benchmark_batch", "pseudonote_extended/batch/state.py")
-utility = load("benchmark_utility", "pseudonote_extended/utility_state.py")
+batch = load("benchmark_batch", "genesect/batch/state.py")
+utility = load("benchmark_utility", "genesect/utility_state.py")
 
 
 def measure(label, callback):

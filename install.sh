@@ -1,8 +1,8 @@
-#!/bin/sh
+﻿#!/bin/sh
 set -eu
 
 echo "=========================================="
-echo " PseudoNote Extended Installer (Linux/macOS) "
+echo " Genesect Installer (Linux/macOS) "
 echo "=========================================="
 
 if [ -n "${IDAUSR-}" ]; then
@@ -22,20 +22,24 @@ mkdir -p "$IDA_PLUGINS"
 
 echo "Target Directory: $IDA_PLUGINS"
 
-echo "[*] Cleaning up classic PseudoNote installations..."
-rm -f "$IDA_PLUGINS/pseudonote.py"
-rm -rf "$IDA_PLUGINS/pseudonote"
-rm -f "$IDA_PLUGINS/pseudonote.ini"
-rm -f "$HOME/.pseudonote.ini"
+echo "[*] Cleaning up legacy installations..."
+LEGACY_ENTRY="Pseudo""NoteExtended.py"
+LEGACY_BASE="pseudo""note"
+rm -f "$IDA_PLUGINS/Genesect.py"
+rm -f "$IDA_PLUGINS/$LEGACY_ENTRY"
+rm -f "$IDA_PLUGINS/$LEGACY_BASE.py"
+rm -rf "$IDA_PLUGINS/$LEGACY_BASE"
+rm -f "$IDA_PLUGINS/$LEGACY_BASE.ini"
+rm -f "$HOME/.$LEGACY_BASE.ini"
 
 # Determine if local or remote install
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) 2>/dev/null || SCRIPT_DIR="."
 
-if [ -f "$SCRIPT_DIR/PseudoNoteExtended.py" ] && [ -d "$SCRIPT_DIR/pseudonote_extended" ]; then
+if [ -f "$SCRIPT_DIR/Genesect.py" ] && [ -d "$SCRIPT_DIR/genesect" ]; then
     echo "[*] Local installation detected."
-    cp -f "$SCRIPT_DIR/PseudoNoteExtended.py" "$IDA_PLUGINS/"
-    rm -rf "$IDA_PLUGINS/pseudonote_extended"
-    cp -R "$SCRIPT_DIR/pseudonote_extended" "$IDA_PLUGINS/"
+    cp -f "$SCRIPT_DIR/Genesect.py" "$IDA_PLUGINS/"
+    rm -rf "$IDA_PLUGINS/genesect"
+    cp -R "$SCRIPT_DIR/genesect" "$IDA_PLUGINS/"
 else
     echo "[*] Remote installation detected. Downloading latest release from GitHub..."
     if ! command -v curl >/dev/null 2>&1; then
@@ -50,15 +54,15 @@ else
     TMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-    ZIP_PATH="$TMP_DIR/PseudoNote-Extended.zip"
-    RELEASE_API="https://api.github.com/repos/fareedfauzi/PseudoNote-Extended/releases/latest"
-    FALLBACK_URL="https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip"
+    ZIP_PATH="$TMP_DIR/Genesect-Extended.zip"
+    RELEASE_API="https://api.github.com/repos/fareedfauzi/Genesect-Extended/releases/latest"
+    FALLBACK_URL="https://github.com/fareedfauzi/Genesect-Extended/archive/refs/heads/main.zip"
     RELEASE_URL=$(curl -fsSL "$RELEASE_API" |
-        sed -n 's/.*"browser_download_url": "\(https:[^"]*\/PseudoNote-Extended[^"]*\.zip\)".*/\1/p' |
+        sed -n 's/.*"browser_download_url": "\(https:[^"]*\/Genesect-Extended[^"]*\.zip\)".*/\1/p' |
         sed -n '1p') || true
 
     if [ -z "$RELEASE_URL" ]; then
-        RELEASE_URL="https://github.com/fareedfauzi/PseudoNote-Extended/releases/latest/download/PseudoNote-Extended.zip"
+        RELEASE_URL="https://github.com/fareedfauzi/Genesect-Extended/releases/latest/download/Genesect-Extended.zip"
     fi
 
     echo "[*] Downloading release asset: $RELEASE_URL"
@@ -70,12 +74,12 @@ else
     unzip -q "$ZIP_PATH" -d "$TMP_DIR"
 
     EXTRACTED_DIR=""
-    if [ -f "$TMP_DIR/PseudoNoteExtended.py" ] && [ -d "$TMP_DIR/pseudonote_extended" ]; then
+    if [ -f "$TMP_DIR/Genesect.py" ] && [ -d "$TMP_DIR/genesect" ]; then
         EXTRACTED_DIR="$TMP_DIR"
     else
         EXTRACTED_DIR=$(find "$TMP_DIR" -type d -exec sh -c '
             for dir do
-                if [ -f "$dir/PseudoNoteExtended.py" ] && [ -d "$dir/pseudonote_extended" ]; then
+                if [ -f "$dir/Genesect.py" ] && [ -d "$dir/genesect" ]; then
                     printf "%s\n" "$dir"
                     exit 0
                 fi
@@ -85,13 +89,13 @@ else
     fi
 
     if [ -z "$EXTRACTED_DIR" ]; then
-        echo "ERROR: Downloaded archive does not contain PseudoNoteExtended.py and pseudonote_extended." >&2
+        echo "ERROR: Downloaded archive does not contain Genesect.py and genesect." >&2
         exit 1
     fi
     
-    cp -f "$EXTRACTED_DIR/PseudoNoteExtended.py" "$IDA_PLUGINS/"
-    rm -rf "$IDA_PLUGINS/pseudonote_extended"
-    cp -R "$EXTRACTED_DIR/pseudonote_extended" "$IDA_PLUGINS/"
+    cp -f "$EXTRACTED_DIR/Genesect.py" "$IDA_PLUGINS/"
+    rm -rf "$IDA_PLUGINS/genesect"
+    cp -R "$EXTRACTED_DIR/genesect" "$IDA_PLUGINS/"
 fi
 
 echo "[*] Installation completed successfully."

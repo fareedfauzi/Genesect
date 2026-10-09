@@ -1,6 +1,6 @@
-# Analysis Pipelines
+﻿# Analysis Pipelines
 
-PseudoNote Extended implements three primary automated analysis engines: the Bulk Analyzer, the Deep Analyzer, and Autonomous Investigation.
+Genesect implements three primary automated analysis engines: the Bulk Analyzer, the Deep Analyzer, and Autonomous Investigation.
 
 *   **Bulk Analyzer:** Optimized for rapid, breadth-first triage of the entire binary.
 *   **Deep Analyzer:** Optimized for thorough, depth-first analysis of a specific execution chain.
@@ -52,7 +52,7 @@ The Autonomous Investigation engine runs an evidence-driven agent inside IDA. It
 *   **Agent Session Creation**
     Creates or restores an `AgentSession` for the selected root function. The session tracks observations, successful tool capabilities, findings, examined addresses, function coverage, and final reports.
 *   **Durable Goal Registration**
-    Creates a SQLite-backed durable goal under the user's PseudoNote agent memory directory. The goal stores project identity, root address, run mode, status, timestamps, metadata, tool steps, events, and findings.
+    Creates a SQLite-backed durable goal under the user's Genesect agent memory directory. The goal stores project identity, root address, run mode, status, timestamps, metadata, tool steps, events, and findings.
 *   **Host-Owned Planning**
     Builds an `AgentPlan` for the run mode (`focused`, `interactive`, `autonomous_full`, or `legacy_bulk`). The plan is injected into prompts and exported into audit logs so progress is owned by the host rather than only by model prose.
 *   **Memory Recall**

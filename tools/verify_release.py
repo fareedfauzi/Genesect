@@ -1,4 +1,4 @@
-"""Verify every file hash recorded inside a PseudoNote Extended release."""
+﻿"""Verify every file hash recorded inside a Genesect release."""
 
 import hashlib
 import json
@@ -22,5 +22,5 @@ def verify(path):
 
 
 if __name__ == "__main__":
-    target = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "dist/PseudoNote-Extended.zip")
+    target = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "dist/Genesect-Extended.zip")
     raise SystemExit(verify(target))

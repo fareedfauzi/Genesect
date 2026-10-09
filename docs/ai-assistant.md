@@ -1,8 +1,8 @@
-# AI Assistant Workflows
+﻿# AI Assistant Workflows
 
-The procedures detailed in this document are accessible via **Right-Click > PseudoNote > AI Assistant**. Proper AI provider configuration and completion of IDA Pro's auto-analysis are prerequisites for executing function-level analysis.
+The procedures detailed in this document are accessible via **Right-Click > Genesect > AI Assistant**. Proper AI provider configuration and completion of IDA Pro's auto-analysis are prerequisites for executing function-level analysis.
 
-## Core Interface: PseudoNote Pane
+## Core Interface: Genesect Pane
 
 <img width="797" height="128" alt="image" src="https://github.com/user-attachments/assets/04a4a801-4014-4451-9ef7-d19d29b72b18" />
 

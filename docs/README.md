@@ -1,6 +1,6 @@
-# PseudoNote Extended Documentation
+﻿# Genesect Documentation
 
-This documentation details the functionality and operational procedures for the PseudoNote Extended plugin within IDA Pro. The primary interface is accessible via the context menu (Right-Click > PseudoNote) in both the Pseudocode and Disassembly views.
+This documentation details the functionality and operational procedures for the Genesect plugin within IDA Pro. The primary interface is accessible via the context menu (Right-Click > Genesect) in both the Pseudocode and Disassembly views.
 
 The toolset is categorized into four primary domains: Settings, AI Assistant, Utilities, and a customizable Bookmarks submenu for rapid access to frequently used commands.
 
@@ -50,5 +50,5 @@ The toolset is categorized into four primary domains: Settings, AI Assistant, Ut
 
 - **Current Function:** The subroutine currently containing the cursor focus when an action is invoked.
 - **Function Chain:** A deterministic graph of callers and callees, bounded by depth and node limits, originating from an entry function.
-- **IDB:** The primary IDA Pro database file, serving as the persistent storage mechanism for both native analysis data and PseudoNote Extended artifacts (via NetNodes).
+- **IDB:** The primary IDA Pro database file, serving as the persistent storage mechanism for both native analysis data and Genesect artifacts (via NetNodes).
 - **Reviewed Change:** A modification to the IDB that has been explicitly authorized by the analyst following AI suggestion.

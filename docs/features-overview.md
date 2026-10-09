@@ -1,12 +1,12 @@
-# Features & Action Registry
+﻿# Features & Action Registry
 
 ## Interface Access
 
-PseudoNote Extended actions are accessible primarily via the context menu within IDA Pro.
+Genesect actions are accessible primarily via the context menu within IDA Pro.
 
 1. Allow IDA Pro's auto-analysis to reach completion.
 2. Navigate to a function within the Pseudocode or Disassembly view.
-3. Right-click to access the **PseudoNote** context menu and select the desired action.
+3. Right-click to access the **Genesect** context menu and select the desired action.
 4. Alternatively, utilize the predefined keyboard shortcuts detailed below.
 
 ---
@@ -15,7 +15,7 @@ PseudoNote Extended actions are accessible primarily via the context menu within
 
 | Action Identifier | Default Shortcut | Context Availability |
 |---|---|---|
-| Show PseudoNote Panes | `Ctrl+Alt+G` | Global |
+| Show Genesect Panes | `Ctrl+Alt+G` | Global |
 | View Saved Notes | `Ctrl+Alt+L` | Global |
 | Configure Settings | Menu Only | Global |
 | Rename Function (Code Context) | `Ctrl+Alt+N` | Global |

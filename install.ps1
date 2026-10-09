@@ -1,8 +1,8 @@
-# PseudoNote Extended Installer (Windows)
+﻿# Genesect Installer (Windows)
 $ErrorActionPreference = "Stop"
 
 Write-Host "=========================================="
-Write-Host "  PseudoNote Extended Installer (Windows) "
+Write-Host "  Genesect Installer (Windows) "
 Write-Host "=========================================="
 
 if ($env:IDAUSR) {
@@ -20,12 +20,16 @@ if (!(Test-Path $IdaPlugins)) {
 
 Write-Host "Target Directory: $IdaPlugins"
 
-Write-Host "[*] Cleaning up classic PseudoNote installations..."
+Write-Host "[*] Cleaning up legacy installations..."
+$LegacyEntryName = "Pseudo" + "NoteExtended.py"
+$LegacyBaseName = "pseudo" + "note"
 $OldFiles = @(
-    (Join-Path $IdaPlugins "pseudonote.py"),
-    (Join-Path $IdaPlugins "pseudonote"),
-    (Join-Path $IdaPlugins "pseudonote.ini"),
-    (Join-Path $env:USERPROFILE ".pseudonote.ini")
+    (Join-Path $IdaPlugins "Genesect.py"),
+    (Join-Path $IdaPlugins $LegacyEntryName),
+    (Join-Path $IdaPlugins ($LegacyBaseName + ".py")),
+    (Join-Path $IdaPlugins $LegacyBaseName),
+    (Join-Path $IdaPlugins ($LegacyBaseName + ".ini")),
+    (Join-Path $env:USERPROFILE ("." + $LegacyBaseName + ".ini"))
 )
 foreach ($File in $OldFiles) {
     if (Test-Path $File) {
@@ -59,10 +63,10 @@ function Get-InstallerScriptDir {
 }
 
 function Get-LatestReleaseZipUri {
-    $ApiUri = "https://api.github.com/repos/fareedfauzi/PseudoNote-Extended/releases/latest"
-    $Release = Invoke-RestMethod -Uri $ApiUri -Headers @{ "User-Agent" = "PseudoNote-Extended-Installer" } -ErrorAction Stop
+    $ApiUri = "https://api.github.com/repos/fareedfauzi/Genesect-Extended/releases/latest"
+    $Release = Invoke-RestMethod -Uri $ApiUri -Headers @{ "User-Agent" = "Genesect-Extended-Installer" } -ErrorAction Stop
     $Asset = $Release.assets |
-        Where-Object { $_.name -match '^PseudoNote-Extended(?:-[0-9][A-Za-z0-9._-]*)?\.zip$' } |
+        Where-Object { $_.name -match '^Genesect-Extended(?:-[0-9][A-Za-z0-9._-]*)?\.zip$' } |
         Select-Object -First 1
 
     if ($Asset -and $Asset.browser_download_url) {
@@ -74,21 +78,21 @@ function Get-LatestReleaseZipUri {
 
 $ScriptDir = Get-InstallerScriptDir
 
-if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -and (Test-Path (Join-Path $ScriptDir "pseudonote_extended"))) {
+if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "Genesect.py")) -and (Test-Path (Join-Path $ScriptDir "genesect"))) {
     Write-Host "[*] Local installation detected."
-    Copy-Item -Force (Join-Path $ScriptDir "PseudoNoteExtended.py") -Destination $IdaPlugins
+    Copy-Item -Force (Join-Path $ScriptDir "Genesect.py") -Destination $IdaPlugins
     
-    $TargetPkg = Join-Path $IdaPlugins "pseudonote_extended"
+    $TargetPkg = Join-Path $IdaPlugins "genesect"
     if (Test-Path $TargetPkg) { Remove-Item -Recurse -Force $TargetPkg }
-    Copy-Item -Recurse -Force (Join-Path $ScriptDir "pseudonote_extended") -Destination $TargetPkg
+    Copy-Item -Recurse -Force (Join-Path $ScriptDir "genesect") -Destination $TargetPkg
 } else {
     Write-Host "[*] Remote installation detected. Downloading latest release from GitHub..."
     $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
     
     try {
-        $ZipPath = Join-Path $TmpDir "PseudoNote-Extended.zip"
-        $FallbackUri = "https://github.com/fareedfauzi/PseudoNote-Extended/archive/refs/heads/main.zip"
+        $ZipPath = Join-Path $TmpDir "Genesect-Extended.zip"
+        $FallbackUri = "https://github.com/fareedfauzi/Genesect-Extended/archive/refs/heads/main.zip"
 
         $OldProgressPreference = $ProgressPreference
         $ProgressPreference = "SilentlyContinue"
@@ -96,7 +100,7 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -
             try {
                 $ReleaseUri = Get-LatestReleaseZipUri
                 if (-not $ReleaseUri) {
-                    throw "No PseudoNote Extended release zip asset found."
+                    throw "No Genesect release zip asset found."
                 }
                 Write-Host "[*] Downloading release asset: $ReleaseUri"
                 Invoke-WebRequest -Uri $ReleaseUri -OutFile $ZipPath -ErrorAction Stop
@@ -113,23 +117,23 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "PseudoNoteExtended.py")) -
 
         $CandidateDirs = @((Get-Item -LiteralPath $TmpDir)) + @(Get-ChildItem -Path $TmpDir -Directory -Recurse)
         $ExtractedDir = $CandidateDirs | Where-Object {
-            (Test-Path (Join-Path $_.FullName "PseudoNoteExtended.py")) -and
-            (Test-Path (Join-Path $_.FullName "pseudonote_extended"))
+            (Test-Path (Join-Path $_.FullName "Genesect.py")) -and
+            (Test-Path (Join-Path $_.FullName "genesect"))
         } | Select-Object -First 1
 
         if (-not $ExtractedDir) {
-            Write-Error "Downloaded archive does not contain PseudoNoteExtended.py and pseudonote_extended."
+            Write-Error "Downloaded archive does not contain Genesect.py and genesect."
             exit 1
         }
 
         $SourceDir = $ExtractedDir.FullName
-        Copy-Item -Force (Join-Path $SourceDir "PseudoNoteExtended.py") -Destination $IdaPlugins
+        Copy-Item -Force (Join-Path $SourceDir "Genesect.py") -Destination $IdaPlugins
         
-        $TargetPkg = Join-Path $IdaPlugins "pseudonote_extended"
+        $TargetPkg = Join-Path $IdaPlugins "genesect"
         if (Test-Path $TargetPkg) { Remove-Item -Recurse -Force $TargetPkg }
         
         # PowerShell Copy-Item -Recurse copies the folder itself into the destination, so destination should be $IdaPlugins
-        Copy-Item -Recurse -Force (Join-Path $SourceDir "pseudonote_extended") -Destination $IdaPlugins
+        Copy-Item -Recurse -Force (Join-Path $SourceDir "genesect") -Destination $IdaPlugins
     } finally {
         Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
     }

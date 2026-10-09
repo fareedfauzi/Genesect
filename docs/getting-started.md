@@ -1,8 +1,8 @@
-# Installation and Workspace Initialization
+﻿# Installation and Workspace Initialization
 
 ## 1. Dependency Resolution
 
-PseudoNote Extended requires a standardized Python environment. All dependencies must be installed within the Python interpreter utilized by your IDA Pro installation.
+Genesect requires a standardized Python environment. All dependencies must be installed within the Python interpreter utilized by your IDA Pro installation.
 
 Execute the following command in your terminal:
 
@@ -37,7 +37,7 @@ sudo apt install python3-httpx python3-openai python3-pyside6.qtcore python3-pys
 
 **Quick Install (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.ps1 | iex
 ```
 
 Alternatively, to install from a local repository clone, navigate to the project directory and execute the batch installer:
@@ -57,15 +57,15 @@ install.bat "C:\Path\To\IDA\plugins"
 Clone the repository:
 
 ```bash
-git clone https://github.com/fareedfauzi/PseudoNote-Extended.git
-cd PseudoNote-Extended
+git clone https://github.com/fareedfauzi/Genesect-Extended.git
+cd Genesect-Extended
 ```
 
 Copy the plugin entry file and package directory into your IDA user plugins folder:
 
 ```text
-PseudoNoteExtended.py
-pseudonote_extended/
+Genesect.py
+genesect/
 ```
 
 Default plugin folders:
@@ -83,15 +83,15 @@ Windows PowerShell example:
 ```powershell
 $Plugins = "$env:APPDATA\Hex-Rays\IDA Pro\plugins"
 New-Item -ItemType Directory -Force -Path $Plugins | Out-Null
-Copy-Item -Force .\PseudoNoteExtended.py $Plugins
-Copy-Item -Recurse -Force .\pseudonote_extended $Plugins
+Copy-Item -Force .\Genesect.py $Plugins
+Copy-Item -Recurse -Force .\genesect $Plugins
 ```
 
 ### Linux and macOS Environments
 
 **Quick Install (Shell):**
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fareedfauzi/PseudoNote-Extended/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fareedfauzi/Genesect-Extended/main/install.sh | bash
 ```
 
 Alternatively, to install from a local repository clone, execute the shell installer script:
@@ -106,25 +106,25 @@ Linux example:
 
 ```sh
 mkdir -p ~/.idapro/plugins
-cp -f PseudoNoteExtended.py ~/.idapro/plugins/
-rm -rf ~/.idapro/plugins/pseudonote_extended
-cp -R pseudonote_extended ~/.idapro/plugins/
+cp -f Genesect.py ~/.idapro/plugins/
+rm -rf ~/.idapro/plugins/genesect
+cp -R genesect ~/.idapro/plugins/
 ```
 
 macOS example:
 
 ```sh
 mkdir -p "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins"
-cp -f PseudoNoteExtended.py "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/"
-rm -rf "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/pseudonote_extended"
-cp -R pseudonote_extended "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/"
+cp -f Genesect.py "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/"
+rm -rf "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/genesect"
+cp -R genesect "$HOME/Library/Application Support/Hex-Rays/IDA Pro/plugins/"
 ```
 
 **Ensure IDA Pro is restarted following a successful installation.**
 
 ## 3. Configuration Parameters
 
-Settings are managed via the context menu: **Right-Click > PseudoNote > Settings**.
+Settings are managed via the context menu: **Right-Click > Genesect > Settings**.
 
 1. Navigate to the **AI Assistant** tab to select the target AI provider.
 2. Supply the necessary connection parameters (Base URL, Model Name, API Key).
@@ -132,7 +132,7 @@ Settings are managed via the context menu: **Right-Click > PseudoNote > Settings
 4. Execute **Test Connection** to validate the endpoint reachability and authentication.
 5. Save the configuration. Changes are immediately applied to the runtime client.
 
-**Note:** Local providers (e.g., LM Studio, Ollama) may operate without an API key, whereas remote enterprise endpoints will require valid authentication tokens. If the plugin lacks write access to the IDA installation directory, configuration state will safely fallback to `~/.pseudonote-extended.ini`.
+**Note:** Local providers (e.g., LM Studio, Ollama) may operate without an API key, whereas remote enterprise endpoints will require valid authentication tokens. If the plugin lacks write access to the IDA installation directory, configuration state will safely fallback to `~/.genesect.ini`.
 
 Additional configuration tabs dictate UI rendering (fonts, syntax highlighting), concurrent worker limits, batch processing sizes, API rate-limit cooldowns, and behavioral parameters for the Deep Analyzer.
 
@@ -156,7 +156,7 @@ The **Browse Saved Artifacts** utility enumerates all functions within the IDB t
 
 ## 5. Legacy Data Migration
 
-For users migrating from the classic PseudoNote implementation, execute the **Migrate Classic PseudoNote Data...** utility.
+For users migrating from an older installation, execute the **Migrate Legacy Data...** utility.
 
 1. Ensure the IDB is backed up prior to execution.
 2. Review the enumerated legacy artifacts.
