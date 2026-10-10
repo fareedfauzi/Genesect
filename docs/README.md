@@ -19,14 +19,15 @@ The toolset is categorized into four primary domains: Settings, AI Assistant, Ut
 3. [**AI Assistant Workflows**](ai-assistant.md)
    - Interactive analysis via the Chat interface
    - Autonomous Function Investigation
+   - Compact autonomous skill routing for Triage Router, Malware Reverse Engineering, IOC Extraction, Packing And Unpacking, Go/Rust User Code, and C++ Virtual Dispatch
    - Bulk symbol and variable renaming procedures
    - Automated code commenting and prototype inference
 
 4. [**Utilities & Explorers**](utilities.md)
    - Navigational aids including the Hex Viewer and Call Tree
    - Go and Rust workflows including GoReSym, user-code mapping, Rust triage, and RIFT
-   - Structural and malware-specific static analysis explorers
-   - AI workspace export, triage routing, signature generation, and external pivoting utilities
+   - Structural and malware-specific static analysis explorers, including full virtual-class report copying
+   - AI workspace export, portable `genesect-triage-router` and `genesect-malware-re` skill packs, signature generation, and external pivoting utilities
 
 5. [**Analysis Pipelines**](pipelines.md)
    - Architecture and execution flow of the Deep Analyzer

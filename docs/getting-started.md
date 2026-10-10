@@ -143,6 +143,8 @@ Settings are managed via the context menu: **Right-Click > Genesect > Settings**
 
 Additional configuration tabs dictate UI rendering (fonts, syntax highlighting), concurrent worker limits, batch processing sizes, API rate-limit cooldowns, and behavioral parameters for the Deep Analyzer.
 
+The Settings dialog also stores optional external tool paths for FLOSS, GoReSym, and RIFT, as well as the actions shown in the customizable **Bookmarks** submenu. Configuration is saved to the plugin folder when writable, or to `~/.genesect.ini` when IDA cannot write to the installation path.
+
 ## 4. Workspace Management
 
 ### Readable Code Reconstruction

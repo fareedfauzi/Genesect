@@ -51,13 +51,17 @@ Skill routing is intentionally lightweight. It does not load a large external pl
 
 Use the routes this way:
 
-*   **Triage Router:** Default route for unclear tasks, stripped binaries, or first-pass evidence collection.
-*   **Malware RE:** Best route for C2/config, injection, persistence, anti-analysis, crypto, loaders, and capability mapping.
-*   **IOC Extraction:** Use when the deliverable is an indicator table. The agent should only report values present in evidence and should preserve source addresses.
-*   **Packing And Unpacking:** Use for packer suspicion, loader stubs, overlays, dumps, unusual entrypoints, or OEP planning.
-*   **Go/Rust User Code:** Use when runtime and standard-library noise hides the real package/crate logic.
-*   **C++ Virtual Dispatch:** Use when vtables, RTTI, constructors, destructors, COM-like interfaces, or virtual dispatch drive behavior.
+| Skill route | Route key | Auto-routing triggers | Use it for |
+|---|---|---|---|
+| Triage Router | `triage-router` | Default fallback | Unclear tasks, stripped binaries, first-pass evidence collection, and choosing the smallest useful evidence path. |
+| Malware Reverse Engineering | `malware-re` | `malware`, `c2`, `config`, `inject`, `persistence`, `anti-analysis`, `debugger`, `sandbox`, `beacon`, `payload`, `ransom`, `stealer`, `command`, `protocol`, `mutex`, `registry` | C2/config recovery, injection, persistence, anti-analysis, crypto, loaders, and capability mapping. |
+| IOC Extraction | `ioc-report` | `ioc`, `indicator`, `domain`, `url`, `ip`, `hash`, `mutex`, `user-agent`, `registry`, `extract` | Evidence-only IOC tables with type, value, confidence, context, source artifact, and snippet. |
+| Packing And Unpacking | `unpacking` | `packed`, `packer`, `unpack`, `upx`, `loader`, `stub`, `overlay`, `entropy`, `dump`, `oep` | Packer suspicion, loader stubs, overlays, dumps, unusual entrypoints, and OEP planning. |
+| Go/Rust User Code | `go-rust` | `go`, `golang`, `go/rust`, `rust`, `crate`, `package`, `lang_start`, `panic`, `runtime` | Finding likely user and third-party code while suppressing runtime and standard-library noise. |
+| C++ Virtual Dispatch | `cpp-vtable` | `vtable`, `vftable`, `virtual`, `rtti`, `class`, `constructor`, `destructor`, `com` | Vtables, RTTI, constructors, destructors, COM-like interfaces, and virtual dispatch behavior. |
 *   **Skills Off:** Disables the compact guidance block and leaves the base autonomous protocol active.
+
+`Skill: Auto` chooses one of these routes from the analyst request and active function context. Binary-wide autonomous investigation starts from the malware reverse-engineering route unless a manual route is selected.
 
 Example result:
 ```

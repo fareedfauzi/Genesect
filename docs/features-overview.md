@@ -13,6 +13,8 @@ Genesect actions are accessible primarily via the context menu within IDA Pro.
 
 ## Action Registry & Keyboard Shortcuts
 
+The registry below mirrors the real IDA actions registered by Genesect. The only registered action intentionally omitted is the non-operational **No bookmarks configured** placeholder shown when the Bookmarks menu has not been customized.
+
 | Action Identifier | Default Shortcut | Context Availability |
 |---|---|---|
 | Open Readable Code | `Ctrl+Alt+G` | Global |
@@ -104,6 +106,8 @@ Genesect actions are accessible primarily via the context menu within IDA Pro.
 *   **Analyst Notes:** Provides a persistent, Markdown-based documentation interface per function.
 *   **Custom Prompt:** Facilitates ad-hoc, structured queries to the AI provider with optional pseudocode/assembly context inclusion.
 *   **Execution Flow:** Generates a textual, high-level control flow graph describing logical branches and intent.
+*   **Settings and Bookmarks:** Configures providers, request limits, fonts, UI behavior, external tool paths, analysis defaults, and the customizable Bookmarks submenu.
+*   **UI Component Preview:** Opens the internal Genesect interface preview used to inspect the shared UI foundation.
 
 ### Symbol Resolution & Documentation
 *   **Function Renaming:** Suggests semantic function names based on algorithmic logic (Code mode) or threat intelligence heuristics (Malware mode).
@@ -114,7 +118,7 @@ Genesect actions are accessible primarily via the context menu within IDA Pro.
 
 ### Advanced Analytical Pipelines
 *   **Contextual Chat:** A persistent, function-aware conversational interface.
-*   **Autonomous Investigation:** A read-only agent workflow that traverses the call graph through IDA tools, records evidence, and supports compact skill routes for malware RE, IOC extraction, unpacking, Go/Rust user-code recovery, and C++ virtual dispatch.
+*   **Autonomous Investigation:** A read-only agent workflow that traverses the call graph through IDA tools, records evidence, and supports compact skill routes: Triage Router (`triage-router`), Malware Reverse Engineering (`malware-re`), IOC Extraction (`ioc-report`), Packing And Unpacking (`unpacking`), Go/Rust User Code (`go-rust`), and C++ Virtual Dispatch (`cpp-vtable`).
 *   **Bulk Renaming Engines:** High-throughput batch processors for renaming functions and variables autonomously.
 *   **Bulk Function Analyzer:** Rapid triage engine that classifies functions against known malicious behavior taxonomies.
 *   **Deep Analyzer:** A comprehensive, multi-stage pipeline that traverses call graphs, renames symbols bottom-up, and generates a standalone HTML report.
@@ -131,8 +135,8 @@ Genesect actions are accessible primarily via the context menu within IDA Pro.
 *   **Interactive Code Blocks:** Adds collapsible block controls to Hex-Rays pseudocode for large nested functions.
 *   **Display function argument names:** Shows known API argument names inline for selected calls.
 *   **Call Tree:** A dynamic, lazily-loaded hierarchical viewer for navigating function cross-references and dependency chains.
-*   **Program Structure Explorers:** Global variables, vtables, virtual classes, COM usage, indirect calls, callback shellcode APIs, centrality, threads, and entry points.
+*   **Program Structure Explorers:** Global variables, vtables, virtual classes, COM usage, indirect calls, callback shellcode APIs, centrality, threads, and entry points. The VTable Explorer scans named and inferred function-pointer tables, while the Virtual-Class Explorer can copy either the selected class evidence or a complete all-classes report for handoff and AI workspace exports.
 *   **Search Pivots:** Integrates external threat intelligence and documentation lookups directly into the selection context.
 *   **Hex Viewer:** A customized, dockable hexadecimal editor optimized for binary analysis.
-*   **Export AI Workspace:** Exports an AI-readable project folder containing function indexes, per-function decompilation and disassembly, callgraph edges, strings, imports, exports, segments, names, Go/Rust classifications, virtual-class evidence, a triage router, a malware reverse-engineering skill pack, and IOC/reporting guidance for Codex, Claude, Cursor, and similar agents.
+*   **Export AI Workspace:** Exports an AI-readable project folder containing function indexes, per-function decompilation and disassembly, callgraph edges, strings, imports, exports, segments, names, Go/Rust classifications, virtual-class evidence, portable `genesect-triage-router` and `genesect-malware-re` skill packs, Cursor rules, and IOC/reporting guidance for Codex, Claude, Cursor, and similar agents.
 *   **Advanced Copy:** Extracts and formats byte sequences into YARA rules, masked hex, Python literals, C arrays, opcode-only sequences, and clean disassembly text.

@@ -2,6 +2,8 @@
 
 The utilities detailed in this document are accessible via **Right-Click > Genesect > Utilities**. Analysts are encouraged to register frequently utilized commands to the **Bookmarks** menu for rapid access.
 
+Bookmarks are configured from **Genesect > Settings**. If no bookmarks are configured, the menu shows a disabled **No bookmarks configured** placeholder.
+
 ## Navigational Aids and Visualizations
 
 ### Hex Viewer
@@ -66,7 +68,8 @@ An interactive, lazily-loaded hierarchical visualization interface for navigatin
 ### Variable and Structure Explorers
 
 *   **Global Variable Explorer:** Aggregates read/write access patterns, initialization logic, and alias definitions for global objects.
-*   **Virtual-Class Explorer:** Identifies RTTI structures, virtual method tables (vtables), and inheritance models to assist in C++ class reconstruction.
+*   **VTable Explorer:** Scans named vtables and conservative unnamed function-pointer arrays in non-code segments, then lists each method slot with the table address, method address, direct callers, and functions that reference the table.
+*   **Virtual-Class Explorer:** Identifies RTTI structures, virtual method tables (vtables), and inheritance models to assist in C++ class reconstruction. Use **Copy Class Report** for the selected class or **Copy All Classes** to place a complete class/vtable evidence report on the clipboard.
 *   **COM Explorer:** Correlates COM initialization, CLSIDs/IIDs, interface calls, and object-lifecycle APIs.
 *   **Indirect Call Explorer:** Locates function pointer assignments, dispatch tables, and indirect execution transfers.
 *   **Callback Shellcode APIs:** Highlights callback-style Windows APIs that can execute analyst-supplied or attacker-controlled code pointers.
@@ -168,12 +171,19 @@ Optimized extraction formats for signature generation and reporting. Accessible 
 
 Creates a local project folder for offline AI-assisted reversing. Genesect prompts for the export location, shows a cancelable progress dialog, and writes a structured workspace with:
 
-*   `AGENTS.md` and `manifest.json` for orientation.
+*   `AGENTS.md`, `CODEX.md`, `CLAUDE.md`, and `manifest.json` for orientation.
 *   `functions/index.tsv` and `functions/callgraph.tsv` for navigation.
 *   Per-function Hex-Rays output under `functions/decompiled/` and disassembly under `functions/disassembly/`.
 *   `strings.tsv`, `imports.tsv`, `exports.tsv`, `segments.tsv`, and `names.tsv` for searchable evidence.
 *   `go_rust_user_code_map.csv` and `virtual_classes.txt` when those Genesect scanners can collect data.
-*   `skills/genesect-triage-router/SKILL.md`, `skills/genesect-malware-re/SKILL.md`, `AGENTS.md`, `CODEX.md`, `CLAUDE.md`, and Cursor rules that teach local AI agents how to route the case, preserve evidence, extract/report IOCs without invention, analyze malware behavior, and use IDA Pro 9.3 scripting assumptions.
+*   `skills/genesect-triage-router/SKILL.md`, `skills/genesect-malware-re/SKILL.md`, `skills/README.md`, and `.cursor/rules/genesect-malware-re.mdc` so local AI agents can route the case, preserve evidence, extract/report IOCs without invention, analyze malware behavior, and use IDA Pro 9.3 scripting assumptions.
+
+Exported portable skills:
+
+| Skill | Purpose |
+|---|---|
+| `genesect-triage-router` | Routes the investigation, defines evidence gates, separates facts from hypotheses, and keeps deliverables reproducible. |
+| `genesect-malware-re` | Provides the malware reverse-engineering workflow for behavior mapping, IOC/config extraction, Go/Rust ownership triage, vtable/class evidence, reporting, and IDA Pro 9.3 scripting guidance. |
 
 The exported skill pack is architecture-neutral by default. It focuses on malware-analysis workflow, IDA 9.3 evidence handling, Go/Rust ownership triage, and vtable/class evidence instead of shipping an architecture-specific deobfuscation route.
 

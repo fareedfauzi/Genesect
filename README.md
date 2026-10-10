@@ -14,13 +14,13 @@ Whether you're triaging a massive binary or performing a deep dive into a specif
 
 ## What's in the box?
 
-* **Agentic Investigation:** Hand the AI a mission (like "Find the C2 config logic") and watch it autonomously traverse the call graph, analyze evidence, and synthesize findings into a structured report. Compact skill routing keeps the agent focused on malware RE, IOC extraction, unpacking, Go/Rust user-code recovery, or C++ virtual dispatch when the task calls for it.
+* **Agentic Investigation:** Hand the AI a mission (like "Find the C2 config logic") and watch it autonomously traverse the call graph, analyze evidence, and synthesize findings into a structured report. Compact skill routing includes Triage Router, Malware Reverse Engineering, IOC Extraction, Packing And Unpacking, Go/Rust User Code, and C++ Virtual Dispatch routes.
 * **Deep Analysis Pipeline:** Point it at an entry function and let it recursively build a call graph, rename everything bottom-up, and spit out a beautiful HTML report.
 * **Bulk Processing Engine:** Feed it hundreds of unnamed functions or variables and let it batch-rename them based on behavioral heuristics.
 * **Contextual AI Chat:** A dockable chat interface that actually understands the function you're currently looking at.
 * **Go and Rust Triage:** GoReSym integration, Go package organization, Go/Rust user-code mapping, Rust binary triage, Rust symbol demangling, Rust string display fixups, and optional RIFT library signature workflows.
-* **Malware Analysis Explorers:** Dedicated static analysis utilities for spotting anti-analysis tricks, process injection, dynamic API resolution, crypto routines, callback dispatch, COM usage, C2/protocol behavior, and more.
-* **AI Workspace Export:** Build a local folder of decompilation, disassembly, callgraphs, strings, imports, Go/Rust evidence, recovered virtual-class data, triage routing, malware RE skills, and IOC/reporting guidance for project-level AI review outside IDA.
+* **Malware Analysis Explorers:** Dedicated static analysis utilities for spotting anti-analysis tricks, process injection, dynamic API resolution, crypto routines, callback dispatch, virtual classes, COM usage, C2/protocol behavior, and more.
+* **AI Workspace Export:** Build a local folder of decompilation, disassembly, callgraphs, strings, imports, Go/Rust evidence, recovered virtual-class reports, portable `genesect-triage-router` and `genesect-malware-re` skills, and IOC/reporting guidance for project-level AI review outside IDA.
 
 ## Installation
 

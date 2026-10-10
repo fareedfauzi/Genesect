@@ -51,6 +51,8 @@ The Autonomous Investigation engine runs an evidence-driven agent inside IDA. It
 
 *   **Agent Session Creation**
     Creates or restores an `AgentSession` for the selected root function. The session tracks observations, successful tool capabilities, findings, examined addresses, function coverage, and final reports.
+*   **Skill Route Selection**
+    Applies a compact guidance route before the first model turn. `Skill: Auto` selects a route from the analyst objective, while manual routes cover Triage Router (`triage-router`), Malware Reverse Engineering (`malware-re`), IOC Extraction (`ioc-report`), Packing And Unpacking (`unpacking`), Go/Rust User Code (`go-rust`), C++ Virtual Dispatch (`cpp-vtable`), or a skills-off baseline.
 *   **Durable Goal Registration**
     Creates a SQLite-backed durable goal under the user's Genesect agent memory directory. The goal stores project identity, root address, run mode, status, timestamps, metadata, tool steps, events, and findings.
 *   **Host-Owned Planning**
