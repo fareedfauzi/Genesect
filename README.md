@@ -1,5 +1,3 @@
-<img width="1672" height="941" alt="Genesect Banner" src="https://github.com/user-attachments/assets/bf3db3fe-e0e7-4244-adbe-11bab2783acf" />
-
 # Genesect
 
 **An AI-powered IDA Pro plugin built for reverse engineers and malware analysts.**
