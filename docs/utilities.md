@@ -42,9 +42,13 @@ Allows dynamic font scaling of the Hex-Rays pseudocode, disassembly, and native 
 
 <img width="756" height="290" alt="image" src="https://github.com/user-attachments/assets/f2e57929-17f4-40b5-ae47-15c9ced45720" />
 
-### Display function argument (WinAPI)
+Adds interactive folding controls to Hex-Rays pseudocode so large nested blocks can be collapsed during review. This is useful when reducing noise around error-handling branches, switch bodies, or deeply nested parser logic.
+
+### Display function argument names
 
 <img width="958" height="478" alt="image" src="https://github.com/user-attachments/assets/0cb14b3b-d4c8-418e-a5b4-7ec2b6c557b4" />
+
+Displays known argument names for recognized API calls directly in pseudocode. The hint data is derived from the bundled Windows API dictionary and is intended as navigation context; analysts should still verify calling conventions and manually recovered prototypes before applying structural changes.
 
 
 ## Program Structure Analysis
@@ -63,7 +67,10 @@ An interactive, lazily-loaded hierarchical visualization interface for navigatin
 
 *   **Global Variable Explorer:** Aggregates read/write access patterns, initialization logic, and alias definitions for global objects.
 *   **Virtual-Class Explorer:** Identifies RTTI structures, virtual method tables (vtables), and inheritance models to assist in C++ class reconstruction.
-*   **Callback Explorer:** Locates function pointer assignments, dispatch tables, and indirect execution transfers.
+*   **COM Explorer:** Correlates COM initialization, CLSIDs/IIDs, interface calls, and object-lifecycle APIs.
+*   **Indirect Call Explorer:** Locates function pointer assignments, dispatch tables, and indirect execution transfers.
+*   **Callback Shellcode APIs:** Highlights callback-style Windows APIs that can execute analyst-supplied or attacker-controlled code pointers.
+*   **Call Centrality Explorer:** Ranks functions by call graph centrality to surface dispatchers, hubs, and high-leverage analysis targets.
 *   **Thread Explorer:** Maps thread-creation APIs, recovered entry points, APC scheduling, completion queues, and explicit message activity.
 *   **Entry-Point Explorer:** Enumerates PE entry points, exported functions, TLS callbacks, and constructor arrays for rapid initial triage.
 
@@ -114,6 +121,19 @@ Builds a shared Go and Rust navigation map under **Utilities > Go & Rust**. The 
 
 Use **Mark IDB** inside the map to add repeatable function comments and IDA colors for likely user and third-party functions. Runtime and standard-library functions are skipped by default so the actual program logic stands out in normal IDA navigation. Use **Clear Marks** in the same map to remove Genesect Go/Rust classification comments and reset Go/Rust function colors back to IDA defaults.
 
+The map has three practical views:
+
+*   **Package and Crate Groups:** Aggregated module-level buckets. For Go, these are package paths when available. For Rust, these are crate or namespace roots inferred from demangled symbols and path-like strings. Use this view to decide where to spend time first.
+*   **Functions:** Concrete IDA functions assigned to each group. User and third-party functions are the highest-value rows; runtime and standard-library functions are useful mostly as boundaries.
+*   **Evidence:** The reason for classification, such as recovered package path, Rust demangled symbol, source path string, import reference, runtime marker, panic metadata, or naming pattern. Treat this as a confidence trail, not a proof by itself.
+
+Typical use cases:
+
+*   Jump directly to likely user code after Go/Rust runtime noise has overwhelmed the function list.
+*   Separate first-party logic from vendored crates/packages before bulk renaming or deep analysis.
+*   Mark likely user and dependency code in IDA so graph navigation visually prioritizes business logic.
+*   Export a CSV map to preserve triage notes or hand off package/crate ownership to another analyst.
+
 ### Rust Binary Analysis
 
 Adds Rust-focused triage under **Utilities > Rust** based on JPCERT/CC's Rust reverse-engineering research.
@@ -123,11 +143,20 @@ Adds Rust-focused triage under **Utilities > Rust** based on JPCERT/CC's Rust re
 *   **Demangle Rust Symbols:** Renames Rust-looking function symbols using a built-in legacy demangler, with optional `rustfilt` support when it is available in `$PATH` for broader symbol coverage.
 *   **RIFT Library Recognition:** Submits inferred Rust metadata to a configured Microsoft RIFT server, polls the FLIRT generation job, and optionally queues generated `.sig` files for IDA application. RIFT is an external research tool with its own dependencies (`rustup`, `cargo`, `pcf`, `sigmake`) and should be run in an isolated analysis VM.
 
+RIFT is server-backed because signature generation depends on Rust toolchains and external build/signature tools that should not run inside IDA. Configure the server URL in Settings or when prompted; the default is `http://127.0.0.1:5001`. The integration checks `/health`, submits `/flirt` metadata, polls the returned job, and offers to apply generated `.sig` files when the job succeeds.
+
+Recommended RIFT workflow:
+
+1. Run the RIFT server in an isolated analysis VM with its required Rust and FLIRT-generation dependencies installed.
+2. Open the Rust sample in IDA and run **Rust Binary Triage** first to confirm the binary really looks Rust-related.
+3. Run **RIFT Library Recognition**, review or edit the generated metadata request, then submit it to the local server.
+4. Apply generated signatures only after verifying they match the compiler/profile evidence for the sample.
+
 ### Static Shellcode Analysis
 
 Executes a heuristic analysis on a selected range of raw bytes to determine potential shellcode architecture, execution logic, and malicious capabilities without relying on dynamic emulation.
 
-### Advance Copy Operations
+### Advanced Copy Operations
 
 Optimized extraction formats for signature generation and reporting. Accessible via the right-click context menu over a selected byte range in the Disassembly view.
 
@@ -135,9 +164,24 @@ Optimized extraction formats for signature generation and reporting. Accessible 
 *   **Source Code Literals:** Extract bytes formatted as Python literals or C/C++ arrays.
 *   **Disassembly Text:** Extract clean assembly instructions stripped of address prefixes.
 
+### Export AI Workspace
+
+Creates a local project folder for offline AI-assisted reversing. Genesect prompts for the export location, shows a cancelable progress dialog, and writes a structured workspace with:
+
+*   `AGENTS.md` and `manifest.json` for orientation.
+*   `functions/index.tsv` and `functions/callgraph.tsv` for navigation.
+*   Per-function Hex-Rays output under `functions/decompiled/` and disassembly under `functions/disassembly/`.
+*   `strings.tsv`, `imports.tsv`, `exports.tsv`, `segments.tsv`, and `names.tsv` for searchable evidence.
+*   `go_rust_user_code_map.csv` and `virtual_classes.txt` when those Genesect scanners can collect data.
+*   `skills/genesect-triage-router/SKILL.md`, `skills/genesect-malware-re/SKILL.md`, `AGENTS.md`, `CODEX.md`, `CLAUDE.md`, and Cursor rules that teach local AI agents how to route the case, preserve evidence, extract/report IOCs without invention, analyze malware behavior, and use IDA Pro 9.3 scripting assumptions.
+
+The exported skill pack is architecture-neutral by default. It focuses on malware-analysis workflow, IDA 9.3 evidence handling, Go/Rust ownership triage, and vtable/class evidence instead of shipping an architecture-specific deobfuscation route.
+
+Open the exported folder in Cursor, Claude Code, Codex, or another local assistant when you want broad project-level reasoning without exposing IDA directly or running an MCP bridge.
+
 ### External Pivot Searching
 
-Enables immediate querying of selected strings or bytes against external threat intelligence platforms (VirusTotal, Google, GitHub, MSDN, CyberChef). 
+Enables immediate querying of selected strings or bytes against external threat intelligence platforms (VirusTotal, Google, GitHub, Microsoft Learn, CyberChef).
 
 *Note: Execution of these pivots transmits the selected artifact to the respective third-party service.*
 

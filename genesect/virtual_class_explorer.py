@@ -166,6 +166,9 @@ class VirtualClassExplorer(ida_kernwin.PluginForm):
         copy = QtWidgets.QPushButton("Copy Class Report")
         copy.clicked.connect(self.copy_report)
         header.add_action(copy)
+        copy_all = QtWidgets.QPushButton("Copy All Classes")
+        copy_all.clicked.connect(self.copy_all_reports)
+        header.add_action(copy_all)
         root.addWidget(header)
         self.filter_edit = QtWidgets.QLineEdit()
         self.filter_edit.setPlaceholderText("Filter classes, methods, RTTI, constructors, or base classes…")
@@ -250,7 +253,7 @@ class VirtualClassExplorer(ida_kernwin.PluginForm):
         return None
 
     def apply_filter(self, text):
-        if not getattr(self, 'rows', None):
+        if not hasattr(self, "tree"):
             return
         needle = str(text or "").strip().lower()
         for index in range(self.tree.topLevelItemCount()):
@@ -272,6 +275,42 @@ class VirtualClassExplorer(ida_kernwin.PluginForm):
         for title, key in (("Constructors", "constructors"), ("Destructors", "destructors"), ("Initializer candidates", "initializer_candidates")):
             output.append("%s: %s" % (title, ", ".join("%s (%s)" % (item["name"], _hex(item["ea"])) for item in record[key].values()) or "None"))
         output.append("RTTI: %s" % (", ".join("%s (%s)" % (item["name"], _hex(item["ea"])) for item in record["rtti"]) or "None"))
+        return "\n".join(output)
+
+    def _all_report_text(self):
+        output = [
+            "Genesect Virtual-Class Explorer Report",
+            "Recovered classes: %d" % len(self.classes),
+            "Recovered vtables: %d" % sum(len(record["tables"]) for record in self.classes),
+            "",
+            "Class / Vtable Summary",
+        ]
+        if not self.classes:
+            output.append("None")
+            return "\n".join(output)
+
+        for record in self.classes:
+            output.append("- %s | confidence=%s | bases=%s" % (
+                record["name"],
+                record["confidence"],
+                ", ".join(record["bases"]) or "None",
+            ))
+            for table in record["tables"]:
+                output.append("  - vtable %s at %s | methods=%d" % (
+                    table["demangled_name"],
+                    _hex(table["ea"]),
+                    len(table["methods"]),
+                ))
+
+        output.extend(["", "Detailed Evidence"])
+        for index, record in enumerate(self.classes, 1):
+            output.extend([
+                "",
+                "=" * 78,
+                "[%d/%d] %s" % (index, len(self.classes), record["name"]),
+                "=" * 78,
+                self._report_text(record),
+            ])
         return "\n".join(output)
 
     def show_selected(self):
@@ -297,6 +336,16 @@ class VirtualClassExplorer(ida_kernwin.PluginForm):
         if record:
             QtWidgets.QApplication.clipboard().setText(self._report_text(record))
             self.status.setText("Copied class report for %s" % record["name"])
+
+    def copy_all_reports(self):
+        text = self._all_report_text()
+        QtWidgets.QApplication.clipboard().setText(text)
+        self.status.setText(
+            "Copied %d recovered classes and %d vtables" % (
+                len(self.classes),
+                sum(len(record["tables"]) for record in self.classes),
+            )
+        )
 
     def OnClose(self, form):
         global _explorer

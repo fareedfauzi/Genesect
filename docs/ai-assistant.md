@@ -43,8 +43,21 @@ The primary dockable panel provides multiple analytical contexts.
 
 1. Invoke **Autonomous Investigation** on the entry function.
 2. Define specific analytical objectives (e.g., "Identify cryptographic constants and execution flow") or execute the default malware analysis profile.
-3. Monitor the agent's iterative tool calls and hypotheses via the Activity pane.
-4. The agent operates in a read-only state. Maintain this configuration unless direct IDB mutation is authorized.
+3. Use **Skill: Auto** for normal work, or select a compact route manually when the objective is already known: **Triage Router**, **Malware RE**, **IOC Extraction**, **Packing And Unpacking**, **Go/Rust User Code**, **C++ Virtual Dispatch**, or **Skills Off**.
+4. Monitor the agent's iterative tool calls and hypotheses via the Activity pane.
+5. The agent operates in a read-only state. Maintain this configuration unless direct IDB mutation is authorized.
+
+Skill routing is intentionally lightweight. It does not load a large external playbook into every turn; it injects a small evidence policy that changes how the autonomous agent prioritizes tools, validates claims, and formats the final result.
+
+Use the routes this way:
+
+*   **Triage Router:** Default route for unclear tasks, stripped binaries, or first-pass evidence collection.
+*   **Malware RE:** Best route for C2/config, injection, persistence, anti-analysis, crypto, loaders, and capability mapping.
+*   **IOC Extraction:** Use when the deliverable is an indicator table. The agent should only report values present in evidence and should preserve source addresses.
+*   **Packing And Unpacking:** Use for packer suspicion, loader stubs, overlays, dumps, unusual entrypoints, or OEP planning.
+*   **Go/Rust User Code:** Use when runtime and standard-library noise hides the real package/crate logic.
+*   **C++ Virtual Dispatch:** Use when vtables, RTTI, constructors, destructors, COM-like interfaces, or virtual dispatch drive behavior.
+*   **Skills Off:** Disables the compact guidance block and leaves the base autonomous protocol active.
 
 Example result:
 ```

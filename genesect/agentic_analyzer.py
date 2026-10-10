@@ -52,6 +52,9 @@ from genesect.agent_policy import AgentPolicy, EXECUTE, PATCH, TOOL_CATEGORIES, 
 from genesect.agent_runtime import (
     AgentSession, build_system_prompt, recovery_guidance, result_status,
 )
+from genesect.agent_skills import (
+    available_skill_routes, detect_skill_route, skill_context_block, skill_profile_title,
+)
 from genesect.ui.theme import ThemeManager
 from genesect.ui.components import PageHeader, Card, StatusBadge, ToggleSwitch
 from genesect.ui.typography import ui_font
@@ -1285,9 +1288,11 @@ class AgenticForm(ida_kernwin.PluginForm):
         # the runtime uses the strict mission/tool envelope below.
         self.system_prompt = {
             "role": "system",
-            "content": build_system_prompt(address, function_name, AGENT_TOOL_CATALOG),
+            "content": build_system_prompt(
+                address, function_name, AGENT_TOOL_CATALOG, skill_context_block("triage-router"),
+            ),
         }
-        self.session = AgentSession(address, function_name)
+        self.session = AgentSession(address, function_name, skill_route="triage-router")
         try:
             checkpoint = load_from_idb(address, tag=AGENTIC_HISTORY_TAG)
             if checkpoint:
@@ -1344,6 +1349,47 @@ class AgenticForm(ida_kernwin.PluginForm):
         self._report_revisions = 0
         self._task_profile = ""
         self._task_targets = []
+        self._skill_route = str(getattr(self.session, "skill_route", "") or "triage-router")
+        self._apply_skill_route(self._skill_route)
+        self.history = [self.system_prompt]
+
+    def _skill_title(self, route):
+        if route == "off":
+            return "Off"
+        if route == "auto":
+            return "Auto"
+        return skill_profile_title(route or "triage-router")
+
+    def _selected_skill_route(self, text="", default_auto="triage-router"):
+        mode = "auto"
+        try:
+            mode = str(self.skill_mode_combo.currentData() or "auto")
+        except Exception:
+            mode = "auto"
+        if mode == "off":
+            return "off"
+        if mode and mode != "auto":
+            return mode
+        if text:
+            return detect_skill_route(text, self.function_name, self._task_profile)
+        return default_auto
+
+    def _apply_skill_route(self, route):
+        self._skill_route = route or "triage-router"
+        try:
+            self.session.skill_route = self._skill_route
+        except Exception:
+            pass
+        self.system_prompt = {
+            "role": "system",
+            "content": build_system_prompt(
+                self.address,
+                self.function_name,
+                AGENT_TOOL_CATALOG,
+                "" if self._skill_route == "off" else skill_context_block(self._skill_route),
+            ),
+        }
+        return self._skill_route
 
     def _reset_agent_core(self, mode="interactive"):
         identity = _current_binary_identity()
@@ -1366,6 +1412,7 @@ class AgenticForm(ida_kernwin.PluginForm):
                         "input_path": identity["input_path"],
                         "idb_path": identity["idb_path"],
                         "task_profile": str(getattr(self, "_task_profile", "") or ""),
+                        "skill_route": str(getattr(self, "_skill_route", "") or ""),
                         "target_count": len(getattr(self, "_task_targets", []) or []),
                     },
                 )
@@ -1395,6 +1442,8 @@ class AgenticForm(ida_kernwin.PluginForm):
             goal_id=self.goal_id,
             mode=str(mode or ""),
             task_profile=str(getattr(self, "_task_profile", "") or ""),
+            skill_route=str(getattr(self, "_skill_route", "") or ""),
+            skill_title=self._skill_title(getattr(self, "_skill_route", "") or "triage-router"),
             max_steps=getattr(self.policy, "max_steps", 0),
             max_seconds=getattr(self.policy, "max_seconds", 0),
             allow_mutations=bool(getattr(self.policy, "allow_mutations", False)),
@@ -1430,6 +1479,13 @@ class AgenticForm(ida_kernwin.PluginForm):
         header.subtitle_label.setText(f"{self.function_name}  •  0x{self.address:X}")
         self.agent_status_badge = StatusBadge("Ready", "neutral")
         header.add_action(self.agent_status_badge)
+        self.skill_mode_combo = QtWidgets.QComboBox()
+        self.skill_mode_combo.setToolTip("Select compact autonomous analysis guidance. Auto routes from the analyst request.")
+        self.skill_mode_combo.addItem("Skill: Auto", "auto")
+        for route in available_skill_routes():
+            self.skill_mode_combo.addItem(skill_profile_title(route), route)
+        self.skill_mode_combo.addItem("Skills Off", "off")
+        header.add_action(self.skill_mode_combo)
         self.btn_audit = QtWidgets.QPushButton("Audit Log")
         self.btn_audit.setObjectName("auditButton")
         self.btn_audit.setToolTip("Inspect and export every tool decision")
@@ -1941,7 +1997,9 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 self._task_targets = _collect_descendant_functions(self.address)
             else:
                 self._task_profile, self._task_targets = "", []
-            self.session = AgentSession(self.address, self.function_name, mission=text)
+            route = self._selected_skill_route(text, default_auto="triage-router")
+            self.session = AgentSession(self.address, self.function_name, mission=text, skill_route=route)
+            self._apply_skill_route(route)
             if self._focused_request:
                 self.policy = AgentPolicy(
                     allow_mutations=self.allow_changes_cb.isChecked(),
@@ -1978,11 +2036,13 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 text=text,
                 focused=bool(self._focused_request),
                 target_count=len(self._task_targets),
+                skill_route=self._skill_route,
             )
             self.history = [self.system_prompt, {
                 "role": "user",
                 "content": (
-                    f"{guidance}\n\nANALYST REQUEST\n{text}\n\nCURRENT STATE\n{self.session.snapshot()}"
+                    f"{guidance}\n\nSKILL ROUTE\n{self._skill_route}: {self._skill_title(self._skill_route)}"
+                    f"\n\nANALYST REQUEST\n{text}\n\nCURRENT STATE\n{self.session.snapshot()}"
                     + self._plan_context()
                     + self._memory_context(text)
                 ),
@@ -2176,6 +2236,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         self.session.phase = "building_call_graph"
         self.session.final_report = ""
         self._task_profile = "autonomous_full"
+        self._apply_skill_route(self._selected_skill_route("", default_auto="malware-re"))
         self._task_targets = _collect_all_functions()
         self._target_by_ea = {target["ea"]: target for target in self._task_targets}
         self._visible_analyzing = set()
@@ -2197,7 +2258,9 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
                 "Begin a complete A-to-Z autonomous investigation. First obtain binary_overview, then analyze every "
                 "host-enumerated function with function_evidence plus decompile (or disassemble when decompilation "
                 "fails). Use deeper tools for suspicious or structurally important functions. Never return a final "
-                "report while the host reports pending coverage.\n\n" + self._coverage_batch_text()
+                "report while the host reports pending coverage.\n\n"
+                f"SKILL ROUTE\n{self._skill_route}: {self._skill_title(self._skill_route)}\n\n"
+                + self._coverage_batch_text()
                 + "\n\nCurrent session state:\n" + self.session.snapshot()
                 + self._plan_context()
                 + self._memory_context(self.function_name)

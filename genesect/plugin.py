@@ -88,6 +88,7 @@ from genesect.rust_analysis_tools import (
     destroy_rust_string_fixup_hooks,
 )
 from genesect.rift_integration import RiftLibraryRecognitionHandler
+from genesect.ai_workspace_export import ExportAIWorkspaceHandler
 from genesect.metadata import PLUGIN_DISPLAY_NAME, __version__
 from genesect.ui.preview import UIPreviewHandler
 from genesect.migration import LegacyMigrationHandler
@@ -616,6 +617,15 @@ class GenesectPlugin(idaapi.plugin_t):
             icon("dump_bytes", 31)
         ))
 
+        idaapi.register_action(idaapi.action_desc_t(
+            "genesect:export_ai_workspace",
+            "Export AI Workspace...",
+            ExportAIWorkspaceHandler(),
+            "",
+            "Export decompilation, disassembly, callgraph, strings, imports, and Genesect evidence for local AI analysis",
+            icon("export_ai_workspace", 31)
+        ))
+
         # Hex Viewer Action (attached in the tools separator group above)
         idaapi.register_action(idaapi.action_desc_t(
             "genesect:hex_viewer",
@@ -862,7 +872,7 @@ class GenesectPlugin(idaapi.plugin_t):
             "genesect:copy_yara_rule", "genesect:copy_yara_mask",
             "genesect:copy_yara_no_imm", "genesect:copy_yara_opcodes",
             "genesect:copy_python", "genesect:copy_c_array", "genesect:copy_disasm",
-            "genesect:dump_bytes", "genesect:hex_viewer",
+            "genesect:dump_bytes", "genesect:export_ai_workspace", "genesect:hex_viewer",
             "genesect:vftable_list",
             "genesect:copy_function_tree",
             "genesect:copy_global_xref_tree",

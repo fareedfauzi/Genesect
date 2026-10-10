@@ -103,6 +103,7 @@ def menu_groups(pseudocode=False, bookmarks=None):
         else:
             existing.extend(actions)
     groups.append(("Utilities/Copy && Export", [
+        "genesect:export_ai_workspace", "-",
         "genesect:copy_function_tree", "genesect:copy_global_xref_tree", "-",
         "genesect:copy_yara_raw", "genesect:copy_yara_mask",
         "genesect:copy_yara_no_imm", "genesect:copy_yara_opcodes",

@@ -170,6 +170,7 @@ class AgentSession:
     root_ea: int
     function_name: str
     mission: str = "Perform evidence-driven malware reverse engineering"
+    skill_route: str = "triage-router"
     created_at: float = field(default_factory=time.time)
     turn: int = 0
     phase: str = "triage"
@@ -500,7 +501,7 @@ def _validate_agent_envelope(value):
     return {"action": "tools", "calls": normalized}, ""
 
 
-def build_system_prompt(root_ea, function_name, tool_catalog):
+def build_system_prompt(root_ea, function_name, tool_catalog, skill_context=""):
     tools = "\n".join(
         f"- {name}: {description}" for name, description in sorted(tool_catalog.items())
     )
@@ -520,7 +521,8 @@ def build_system_prompt(root_ea, function_name, tool_catalog):
         "without per-operation review during autonomous mode. "
         "If a requested change is blocked, explain how to enable IDA changes rather than pretending it succeeded.\n\n"
         "Available tools:\n" + tools + "\n\n"
-        "Return exactly one JSON object per turn. To call tools:\n"
+        + (str(skill_context or "").strip() + "\n\n" if str(skill_context or "").strip() else "")
+        + "Return exactly one JSON object per turn. To call tools:\n"
         '{"action":"tools","calls":[{"tool":"decompile","args":{"ea":"0x401000"}}]}\n'
         "Use at most four independent read calls in one turn. Do not repeat an identical call unless new evidence "
         "justifies it. Every call must resolve a named information gap; never call a tool merely because it exists. "

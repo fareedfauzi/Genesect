@@ -26,7 +26,7 @@ The toolset is categorized into four primary domains: Settings, AI Assistant, Ut
    - Navigational aids including the Hex Viewer and Call Tree
    - Go and Rust workflows including GoReSym, user-code mapping, Rust triage, and RIFT
    - Structural and malware-specific static analysis explorers
-   - Signature generation and external pivoting utilities
+   - AI workspace export, triage routing, signature generation, and external pivoting utilities
 
 5. [**Analysis Pipelines**](pipelines.md)
    - Architecture and execution flow of the Deep Analyzer
